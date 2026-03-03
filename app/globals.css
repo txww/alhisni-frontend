@@ -1,8 +1,12 @@
 @import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+:root{
+  --gold:#C6A85B;
+  --lux-black:#0F0F0F;
+  --soft-white:#F8F6F1;
 }
 
 @theme inline {
@@ -23,4 +27,12 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  color: var(--lux-black); /* أضف هذا */
+}
+
+:root{
+  --gold:#C6A85B;
+  --lux-black:#0F0F0F;
+  --soft-white:#F8F6F1;
+  --text-gray:#6B6B6B;
 }
