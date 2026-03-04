@@ -115,14 +115,14 @@ export default function Footer() {
                 <span className="mt-0.5 text-[var(--gold)]">
                   <IconMail />
                 </span>
-                <span>info@al-hosny.edu</span>
+                <span>alamam.alhisniu@gmail.com</span>
               </li>
 
               <li className="flex items-start gap-3">
                 <span className="mt-0.5 text-[var(--gold)]">
                   <IconPhone />
                 </span>
-                <span>+000 000 000 000</span>
+                <span></span>
               </li>
 
               <li className="flex items-start gap-3">
