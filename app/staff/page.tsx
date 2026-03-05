@@ -7,7 +7,7 @@ type StaffMember = {
 };
 
 const staff: StaffMember[] = [
-  { name: "الشيخ مثنى بهجت الحريري", title: "مدير المعهد", image: "/staff/1.jpg" },
+  { name: "الشيخ المثنى بهجات الحريري", title: "مدير المعهد", image: "/staff/1.jpg" },
   { name: "د. إبراهيم يونس الحريري", title: "معاون مدير المعهد", image: "/staff/2.jpg" },
   { name: "الشيخ خالد الحسين", title: "مدرس أصول الفقه", image: "/staff/3.jpg" },
   { name: "الشيخ عمار الناصر", title: "مدرس أخلاق العلماء", image: "/staff/4.jpg" },
