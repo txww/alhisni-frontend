@@ -19,6 +19,8 @@ export default function AdminLoginPage() {
     });
 
     if (res.ok) {
+      // حفظ في localStorage كبديل عن cookie
+      localStorage.setItem("hisni_admin", password);
       router.push("/hisni-control-panel/students");
     } else {
       setError("كلمة المرور غير صحيحة");
@@ -36,19 +38,14 @@ export default function AdminLoginPage() {
         <p className="text-[var(--text-gray)] text-sm mb-6">معهد الإمام تقي الدين الحصني</p>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
-            {error}
-          </div>
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">{error}</div>
         )}
 
-        <input
-          type="password"
-          value={password}
+        <input type="password" value={password}
           onChange={(e) => setPassword(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleLogin()}
           placeholder="كلمة المرور"
-          className="w-full border border-gray-200 rounded-lg px-4 py-3 text-center text-black bg-white focus:outline-none focus:border-[var(--gold)] transition mb-4"
-        />
+          className="w-full border border-gray-200 rounded-lg px-4 py-3 text-center text-black bg-white focus:outline-none focus:border-[var(--gold)] transition mb-4" />
         <button onClick={handleLogin} disabled={loading}
           className="w-full bg-[var(--gold)] text-white py-3 rounded-lg font-semibold hover:opacity-90 transition disabled:opacity-60">
           {loading ? "جاري التحقق..." : "دخول"}

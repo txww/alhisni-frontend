@@ -57,6 +57,7 @@ export default function AdminPage() {
   const [adminPass, setAdminPass] = useState("");
   const [passError, setPassError] = useState("");
   const [activeTab, setActiveTab] = useState<"students" | "sessions">("students");
+  const [checking, setChecking] = useState(true);
 
   const [students, setStudents] = useState<Student[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
@@ -72,8 +73,25 @@ export default function AdminPage() {
   const [sessionMsg, setSessionMsg] = useState("");
   const [editingSession, setEditingSession] = useState<ZoomSession | null>(null);
 
+  // التحقق عند التحميل
   useEffect(() => {
-    if (localStorage.getItem("adminJwt")) setAuthed(true);
+    const checkAuth = async () => {
+      const saved = localStorage.getItem("hisni_admin_pass");
+      if (!saved) { setChecking(false); return; }
+      // تحقق من الـ API
+      const res = await fetch("/api/admin-auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: saved }),
+      });
+      if (res.ok) {
+        setAuthed(true);
+      } else {
+        localStorage.removeItem("hisni_admin_pass");
+      }
+      setChecking(false);
+    };
+    checkAuth();
   }, []);
 
   useEffect(() => {
@@ -81,15 +99,26 @@ export default function AdminPage() {
   }, [authed]);
 
   const handleAdminLogin = async () => {
-    if (adminPass !== ADMIN_PASSWORD) { setPassError("كلمة المرور غير صحيحة"); return; }
-    const res = await fetch(`${STRAPI_URL}/api/auth/local`, {
+    setPassError("");
+    // تحقق من كلمة المرور عبر API
+    const res = await fetch("/api/admin-auth", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ identifier: ADMIN_EMAIL, password: adminPass }),
+      body: JSON.stringify({ password: adminPass }),
     });
-    const data = await res.json();
-    if (!res.ok) { setPassError("تعذّر تسجيل الدخول"); return; }
+    if (!res.ok) { setPassError("كلمة المرور غير صحيحة"); return; }
+
+    // تسجيل دخول Strapi
+    const strapiRes = await fetch(`${STRAPI_URL}/api/auth/local`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier: ADMIN_EMAIL, password: ADMIN_PASSWORD }),
+    });
+    const data = await strapiRes.json();
+    if (!strapiRes.ok) { setPassError("تعذّر تسجيل الدخول"); return; }
+
     localStorage.setItem("adminJwt", data.jwt);
+    localStorage.setItem("hisni_admin_pass", adminPass);
     setAuthed(true);
   };
 
@@ -102,27 +131,26 @@ export default function AdminPage() {
     setLoadingStudents(false);
   };
 
-const fetchSessions = async () => {
-  setLoadingSessions(true);
-  const jwt = localStorage.getItem("adminJwt");
-  const res = await fetch(`${STRAPI_URL}/api/zoom-sessions?sort=date:asc`, {
-    headers: { Authorization: `Bearer ${jwt}` },
-  });
-  const data = await res.json();
-  // Strapi v5 يرجع البيانات مباشرة بدون attributes
-  const list = Array.isArray(data?.data)
-    ? data.data.map((s: ZoomSession & { documentId?: string }) => ({
-        id: s.id,
-        title: s.title,
-        date: s.date,
-        zoomLink: s.zoomLink,
-        academicYear: s.academicYear,
-        isActive: s.isActive,
-      }))
-    : [];
-  setSessions(list);
-  setLoadingSessions(false);
-};
+  const fetchSessions = async () => {
+    setLoadingSessions(true);
+    const jwt = localStorage.getItem("adminJwt");
+    const res = await fetch(`${STRAPI_URL}/api/zoom-sessions?sort=date:asc`, {
+      headers: { Authorization: `Bearer ${jwt}` },
+    });
+    const data = await res.json();
+    const list = Array.isArray(data?.data)
+      ? data.data.map((s: ZoomSession & { documentId?: string }) => ({
+          id: s.id,
+          title: s.title,
+          date: s.date,
+          zoomLink: s.zoomLink,
+          academicYear: s.academicYear,
+          isActive: s.isActive,
+        }))
+      : [];
+    setSessions(list);
+    setLoadingSessions(false);
+  };
 
   const updateStudent = async (studentId: number, updates: Partial<Student>) => {
     setUpdating(true);
@@ -164,7 +192,7 @@ const fetchSessions = async () => {
 
   const startEditSession = (session: ZoomSession) => {
     setEditingSession(session);
-    setSessionForm({ title: session.title, date: session.date.slice(0, 16), zoomLink: session.zoomLink, academicYear: session.academicYear, isActive: session.isActive });
+    setSessionForm({ title: session.title, date: session.date ? session.date.slice(0, 16) : "", zoomLink: session.zoomLink || "", academicYear: session.academicYear || "year1", isActive: session.isActive ?? true });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -172,6 +200,12 @@ const fetchSessions = async () => {
     const matchesFilter = filter === "all" || s.registrationStatus === filter;
     return matchesFilter && `${s.firstName || ""} ${s.lastName || ""} ${s.email}`.toLowerCase().includes(search.toLowerCase());
   });
+
+  if (checking) {
+    return <main className="min-h-screen bg-[var(--lux-black)] flex items-center justify-center">
+      <div className="text-[var(--gold)] text-lg">جاري التحقق...</div>
+    </main>;
+  }
 
   if (!authed) {
     return (
@@ -202,7 +236,7 @@ const fetchSessions = async () => {
             <h1 className="text-2xl font-bold text-[var(--lux-black)]">لوحة الإدارة</h1>
             <p className="text-[var(--text-gray)] text-sm">معهد الإمام تقي الدين الحصني</p>
           </div>
-          <button onClick={() => { localStorage.removeItem("adminJwt"); setAuthed(false); }}
+          <button onClick={() => { localStorage.removeItem("adminJwt"); localStorage.removeItem("hisni_admin_pass"); setAuthed(false); }}
             className="border border-gray-300 text-[var(--text-gray)] px-5 py-2 rounded-lg text-sm hover:bg-gray-100 transition">خروج</button>
         </div>
 
@@ -231,7 +265,6 @@ const fetchSessions = async () => {
           ))}
         </div>
 
-        {/* تبويب الطلاب */}
         {activeTab === "students" && (
           <>
             <div className="flex flex-wrap gap-3 mb-5">
@@ -326,7 +359,6 @@ const fetchSessions = async () => {
           </>
         )}
 
-        {/* تبويب جلسات Zoom */}
         {activeTab === "sessions" && (
           <div className="flex gap-5">
             <div className="w-80 shrink-0">
