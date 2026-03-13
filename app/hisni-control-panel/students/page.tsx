@@ -19,6 +19,7 @@ interface Student {
   gender?: string;
   registrationStatus?: string;
   academicYear?: string;
+  birthDate?: string;
 }
 
 interface ZoomSession {
@@ -52,6 +53,52 @@ const educationMap: Record<string, string> = {
   postgraduate: "دراسات عليا",
 };
 
+const genderMap: Record<string, string> = {
+  male: "ذكر",
+  female: "أنثى",
+};
+
+// حساب العمر من تاريخ الميلاد
+const calcAge = (birthDate?: string) => {
+  if (!birthDate) return "";
+  const birth = new Date(birthDate);
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+  return age.toString();
+};
+
+// تصدير CSV
+const exportCSV = (students: Student[]) => {
+  const headers = ["الاسم الكامل", "البريد الإلكتروني", "العمر", "الجنس", "المؤهل الدراسي", "الجنسية", "بلد الإقامة", "الهاتف", "السنة الدراسية", "حالة التسجيل"];
+  
+  const rows = students.map(s => [
+    `${s.firstName || ""} ${s.lastName || ""}`.trim(),
+    s.email,
+    calcAge(s.birthDate),
+    genderMap[s.gender || ""] || s.gender || "",
+    educationMap[s.educationLevel || ""] || s.educationLevel || "",
+    s.nationality || "",
+    s.residenceCountry || "",
+    s.phone || "",
+    yearMap[s.academicYear || ""] || s.academicYear || "",
+    statusMap[s.registrationStatus || "pending"]?.label || "",
+  ]);
+
+  // BOM لدعم العربية في Excel
+  const BOM = "\uFEFF";
+  const csv = BOM + [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(",")).join("\n");
+  
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `طلاب_معهد_الحصني_${new Date().toLocaleDateString("ar-SA").replace(/\//g, "-")}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
 export default function AdminPage() {
   const [authed, setAuthed] = useState(false);
   const [adminPass, setAdminPass] = useState("");
@@ -73,22 +120,17 @@ export default function AdminPage() {
   const [sessionMsg, setSessionMsg] = useState("");
   const [editingSession, setEditingSession] = useState<ZoomSession | null>(null);
 
-  // التحقق عند التحميل
   useEffect(() => {
     const checkAuth = async () => {
       const saved = localStorage.getItem("hisni_admin_pass");
       if (!saved) { setChecking(false); return; }
-      // تحقق من الـ API
       const res = await fetch("/api/admin-auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: saved }),
       });
-      if (res.ok) {
-        setAuthed(true);
-      } else {
-        localStorage.removeItem("hisni_admin_pass");
-      }
+      if (res.ok) setAuthed(true);
+      else localStorage.removeItem("hisni_admin_pass");
       setChecking(false);
     };
     checkAuth();
@@ -100,15 +142,12 @@ export default function AdminPage() {
 
   const handleAdminLogin = async () => {
     setPassError("");
-    // تحقق من كلمة المرور عبر API
     const res = await fetch("/api/admin-auth", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ password: adminPass }),
     });
     if (!res.ok) { setPassError("كلمة المرور غير صحيحة"); return; }
-
-    // تسجيل دخول Strapi
     const strapiRes = await fetch(`${STRAPI_URL}/api/auth/local`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -116,7 +155,6 @@ export default function AdminPage() {
     });
     const data = await strapiRes.json();
     if (!strapiRes.ok) { setPassError("تعذّر تسجيل الدخول"); return; }
-
     localStorage.setItem("adminJwt", data.jwt);
     localStorage.setItem("hisni_admin_pass", adminPass);
     setAuthed(true);
@@ -134,18 +172,11 @@ export default function AdminPage() {
   const fetchSessions = async () => {
     setLoadingSessions(true);
     const jwt = localStorage.getItem("adminJwt");
-    const res = await fetch(`${STRAPI_URL}/api/zoom-sessions?sort=date:asc`, {
-      headers: { Authorization: `Bearer ${jwt}` },
-    });
+    const res = await fetch(`${STRAPI_URL}/api/zoom-sessions?sort=date:asc`, { headers: { Authorization: `Bearer ${jwt}` } });
     const data = await res.json();
     const list = Array.isArray(data?.data)
       ? data.data.map((s: ZoomSession & { documentId?: string }) => ({
-          id: s.id,
-          title: s.title,
-          date: s.date,
-          zoomLink: s.zoomLink,
-          academicYear: s.academicYear,
-          isActive: s.isActive,
+          id: s.id, title: s.title, date: s.date, zoomLink: s.zoomLink, academicYear: s.academicYear, isActive: s.isActive,
         }))
       : [];
     setSessions(list);
@@ -267,6 +298,7 @@ export default function AdminPage() {
 
         {activeTab === "students" && (
           <>
+            {/* شريط البحث والفلتر وزر التصدير */}
             <div className="flex flex-wrap gap-3 mb-5">
               <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث بالاسم أو الإيميل..."
                 className="border border-gray-200 rounded-lg px-4 py-2 text-right text-black bg-white focus:outline-none focus:border-[var(--gold)] transition flex-1 min-w-48" />
@@ -276,6 +308,13 @@ export default function AdminPage() {
                   {f === "all" ? "الكل" : f === "pending" ? "قيد المراجعة" : f === "approved" ? "مقبولون" : "مرفوضون"}
                 </button>
               ))}
+              {/* زر تصدير CSV */}
+              <button
+                onClick={() => exportCSV(filtered)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-green-600 text-white hover:bg-green-700 transition"
+              >
+                📥 تصدير Excel
+              </button>
             </div>
 
             <div className="flex gap-5">
@@ -325,11 +364,13 @@ export default function AdminPage() {
                   </div>
 
                   <div className="flex flex-col gap-2 mb-4 text-sm">
+                    {selected.birthDate && <Detail label="العمر" value={`${calcAge(selected.birthDate)} سنة`} />}
+                    {selected.gender && <Detail label="الجنس" value={genderMap[selected.gender] || selected.gender} />}
                     {selected.phone && <Detail label="الهاتف" value={selected.phone} />}
                     {selected.telegram && <Detail label="تليجرام" value={selected.telegram} />}
                     {selected.nationality && <Detail label="الجنسية" value={selected.nationality} />}
                     {selected.residenceCountry && <Detail label="بلد الإقامة" value={selected.residenceCountry} />}
-                    {selected.educationLevel && <Detail label="التعليم" value={educationMap[selected.educationLevel] || selected.educationLevel} />}
+                    {selected.educationLevel && <Detail label="المؤهل" value={educationMap[selected.educationLevel] || selected.educationLevel} />}
                   </div>
 
                   <div className="mb-4">

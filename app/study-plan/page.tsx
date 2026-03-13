@@ -8,12 +8,12 @@ const studyPlan = [
       {
         title: "الفصل الأول",
         subjects: [
-          { name: "الفقه", memorization: "", core: "فتح القريب المجيب (1)\nدار المنهاج/ دار ابن حزم", supplementary: "", enrichment: "" },
+          { name: "الفقه", memorization: "", core: "متن  الغاية والتقريب\nتحقيق ماجد الحموي", supplementary: "", enrichment: "" },
           { name: "أصول الفقه", memorization: "الورقات", core: "الورقات في أصول الفقه\nت: عبدالمحسن القاسم", supplementary: "", enrichment: "" },
-          { name: "القواعد الفقهية", memorization: "", core: "منظومة المسكة الكوثرية\nمحمد سالم البحيري", supplementary: "", enrichment: "" },
+          { name: "القواعد الفقهية", memorization: "", core: "الخلاصة في القواعد الفقهية عند الشافعية\nلعبد الله بن سعيد المخاشن", supplementary: "", enrichment: "" },
           { name: "النحو", memorization: "", core: "حقيبة المشجرات والتمرينات على الآجرومية ونظمها\nمركز تميز، دار مفكرون بلا حدود", supplementary: "", enrichment: "" },
           { name: "المذهب", memorization: "", core: "", supplementary: "- التعليق على المدخل إلى مذهب الإمام الشافعي\nدار الخير (إندونيسيا)\n- توالي التأسيس لمعالي محمد بن إدريس\nدار الكتب العلمية", enrichment: "" },
-          { name: "الآداب", memorization: "", core: "", supplementary: "", enrichment: "تذكرة السامع والمتكلم\nدار البشائر الإسلامية" },
+          { name: "الآداب", memorization: "", core: "", supplementary: "", enrichment: "التربية النبوية\nلمحمد عبدالله الدرويش طبعة دار اليقين" },
           { name: "متفرقات", memorization: "", core: "", supplementary: "", enrichment: "- صفحات من صبر العلماء\nعبدالفتاح أبو غدة\nدار السلام / دار البشائر" },
         ],
       },

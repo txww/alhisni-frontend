@@ -30,31 +30,34 @@ export default function RegisterPage() {
     agreeToTerms: false,
   });
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const target = e.target;
-    const value =
-      target.type === "checkbox"
-        ? (target as HTMLInputElement).checked
-        : target.value;
+    const value = target.type === "checkbox" ? (target as HTMLInputElement).checked : target.value;
     setForm((prev) => ({ ...prev, [target.name]: value }));
   };
 
+  // ✅ جميع حقول الخطوة الأولى إجبارية
   const validateStep1 = () => {
-    if (!form.firstName) return "الاسم الأول مطلوب";
-    if (!form.lastName) return "الاسم الأخير مطلوب";
-    if (!form.email) return "البريد الإلكتروني مطلوب";
-    if (!form.phone) return "رقم الهاتف مطلوب";
+    if (!form.firstName.trim()) return "الاسم الأول مطلوب";
+    if (!form.lastName.trim()) return "الاسم الأخير مطلوب";
+    if (!form.email.trim()) return "البريد الإلكتروني مطلوب";
+    if (!form.phone.trim()) return "رقم الهاتف مطلوب";
+    if (!form.gender) return "الجنس مطلوب";
+    if (!form.birthDate) return "تاريخ الميلاد مطلوب";
     if (!form.password) return "كلمة المرور مطلوبة";
-    if (form.password !== form.confirmPassword) return "كلمتا المرور غير متطابقتين";
     if (form.password.length < 8) return "كلمة المرور يجب أن تكون 8 أحرف على الأقل";
+    if (form.password !== form.confirmPassword) return "كلمتا المرور غير متطابقتين";
     return "";
   };
 
+  // ✅ جميع حقول الخطوة الثانية إجبارية
   const validateStep2 = () => {
-    if (!form.residenceCountry) return "بلد الإقامة مطلوب";
-    if (!form.telegram) return "رقم أو معرف التليجرام مطلوب";
+    if (!form.nationality.trim()) return "الجنسية مطلوبة";
+    if (!form.residenceCountry.trim()) return "بلد الإقامة مطلوب";
+    if (!form.educationLevel) return "المستوى التعليمي مطلوب";
+    if (!form.telegram.trim()) return "رقم أو معرف التليجرام مطلوب";
+    if (!form.howDidYouKnow) return "يرجى اختيار كيف عرفت المعهد";
+    if (!form.availableHours) return "يرجى تحديد عدد الساعات المتاحة يومياً";
     if (!form.agreeToTerms) return "يجب الموافقة على الشروط والأحكام";
     return "";
   };
@@ -65,70 +68,65 @@ export default function RegisterPage() {
     setError("");
     setStep(2);
   };
-const handleSubmit = async () => {
-  const err = validateStep2();
-  if (err) { setError(err); return; }
-  setError("");
-  setLoading(true);
 
-  try {
-    // الخطوة 1: تسجيل المستخدم
-    const registerRes = await fetch(`${STRAPI_URL}/api/auth/local/register`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        username: form.email,
-        email: form.email,
-        password: form.password,
-      }),
-    });
+  const handleSubmit = async () => {
+    const err = validateStep2();
+    if (err) { setError(err); return; }
+    setError("");
+    setLoading(true);
 
-    const registerData = await registerRes.json();
+    try {
+      const registerRes = await fetch(`${STRAPI_URL}/api/auth/local/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: form.email,
+          email: form.email,
+          password: form.password,
+        }),
+      });
 
-    if (!registerRes.ok) {
-      const msg = registerData?.error?.message || "حدث خطأ، يرجى المحاولة مجدداً";
-      setError(msg);
-      return;
+      const registerData = await registerRes.json();
+
+      if (!registerRes.ok) {
+        const msg = registerData?.error?.message || "حدث خطأ، يرجى المحاولة مجدداً";
+        setError(msg);
+        return;
+      }
+
+      const jwt = registerData.jwt;
+      const userId = registerData.user.id;
+
+      await fetch(`${STRAPI_URL}/api/users/${userId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwt}` },
+        body: JSON.stringify({
+          firstName: form.firstName,
+          lastName: form.lastName,
+          phone: form.phone,
+          gender: form.gender,
+          birthDate: form.birthDate,
+          nationality: form.nationality,
+          residenceCountry: form.residenceCountry,
+          educationLevel: form.educationLevel,
+          telegram: form.telegram,
+          howDidYouKnow: form.howDidYouKnow,
+          worksFullTime: form.worksFullTime,
+          otherInstitutes: form.otherInstitutes,
+          availableHours: form.availableHours,
+          registrationStatus: "pending",
+        }),
+      });
+
+      localStorage.setItem("jwt", jwt);
+      localStorage.setItem("user", JSON.stringify(registerData.user));
+      setSuccess(true);
+    } catch {
+      setError("تعذّر الاتصال بالخادم، يرجى المحاولة لاحقاً");
+    } finally {
+      setLoading(false);
     }
-
-    const jwt = registerData.jwt;
-    const userId = registerData.user.id;
-
-    // الخطوة 2: تحديث البيانات الإضافية
-    await fetch(`${STRAPI_URL}/api/users/${userId}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${jwt}`,
-      },
-body: JSON.stringify({
-  firstName: form.firstName,
-  lastName: form.lastName,
-  phone: form.phone,
-  gender: form.gender || null,
-  birthDate: form.birthDate || null,
-  nationality: form.nationality || null,
-  residenceCountry: form.residenceCountry,
-  educationLevel: form.educationLevel || null,
-  telegram: form.telegram,
-  howDidYouKnow: form.howDidYouKnow || null,
-  worksFullTime: form.worksFullTime,
-  otherInstitutes: form.otherInstitutes,
-  availableHours: form.availableHours || null,
-  registrationStatus: "pending",
-}),
-    });
-
-    localStorage.setItem("jwt", jwt);
-    localStorage.setItem("user", JSON.stringify(registerData.user));
-
-    setSuccess(true);
-  } catch {
-    setError("تعذّر الاتصال بالخادم، يرجى المحاولة لاحقاً");
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   if (success) {
     return (
@@ -152,10 +150,10 @@ body: JSON.stringify({
     <main className="min-h-screen bg-[var(--soft-white)] py-16 px-4">
       <div className="max-w-4xl mx-auto">
 
-        {/* Header */}
         <div className="text-center mb-10">
           <h1 className="text-3xl font-bold text-[var(--lux-black)] mb-2">التسجيل في المعهد</h1>
           <p className="text-[var(--text-gray)]">معهد الإمام تقي الدين الحصني للتفقه الشافعي</p>
+          <p className="text-sm text-red-500 mt-2">جميع الحقول إجبارية <span className="font-bold">*</span></p>
         </div>
 
         {/* Steps Indicator */}
@@ -172,54 +170,45 @@ body: JSON.stringify({
         </div>
 
         <div className="flex gap-6">
-          {/* Form */}
           <div className="flex-1 bg-white rounded-2xl shadow-sm p-8">
 
             {error && (
               <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm text-right">
-                {error}
+                ⚠️ {error}
               </div>
             )}
 
+            {/* الخطوة الأولى */}
             {step === 1 && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div>
-                  <label className="block text-sm font-medium text-[var(--lux-black)] mb-1">الاسم الأول <span className="text-red-500">*</span></label>
-                  <input name="firstName" value={form.firstName} onChange={handleChange} className="w-full border border-gray-200 rounded-lg px-4 py-3 text-right text-[var(--lux-black)] bg-white focus:outline-none focus:border-[var(--gold)] transition" placeholder="أدخل اسمك الأول" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--lux-black)] mb-1">الاسم الأخير <span className="text-red-500">*</span></label>
-                  <input name="lastName" value={form.lastName} onChange={handleChange} className="w-full border border-gray-200 rounded-lg px-4 py-3 text-right focus:outline-none focus:border-[var(--gold)] transition" placeholder="أدخل اسمك الأخير" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--lux-black)] mb-1">البريد الإلكتروني <span className="text-red-500">*</span></label>
-                  <input name="email" type="email" value={form.email} onChange={handleChange} className="w-full border border-gray-200 rounded-lg px-4 py-3 text-right focus:outline-none focus:border-[var(--gold)] transition" placeholder="example@email.com" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--lux-black)] mb-1">رقم الهاتف <span className="text-red-500">*</span></label>
-                  <input name="phone" value={form.phone} onChange={handleChange} className="w-full border border-gray-200 rounded-lg px-4 py-3 text-right focus:outline-none focus:border-[var(--gold)] transition" placeholder="+963 xxx xxx xxx" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--lux-black)] mb-1">كلمة المرور <span className="text-red-500">*</span></label>
-                  <input name="password" type="password" value={form.password} onChange={handleChange} className="w-full border border-gray-200 rounded-lg px-4 py-3 text-right focus:outline-none focus:border-[var(--gold)] transition" placeholder="8 أحرف على الأقل" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--lux-black)] mb-1">تأكيد كلمة المرور <span className="text-red-500">*</span></label>
-                  <input name="confirmPassword" type="password" value={form.confirmPassword} onChange={handleChange} className="w-full border border-gray-200 rounded-lg px-4 py-3 text-right focus:outline-none focus:border-[var(--gold)] transition" placeholder="أعد كتابة كلمة المرور" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--lux-black)] mb-1">النوع</label>
-                  <select name="gender" value={form.gender} onChange={handleChange} className="w-full border border-gray-200 rounded-lg px-4 py-3 text-right focus:outline-none focus:border-[var(--gold)] transition bg-white">
-                    <option value="">اختر</option>
+                <Field label="الاسم الأول">
+                  <input name="firstName" value={form.firstName} onChange={handleChange} className={cls} placeholder="أدخل اسمك الأول" />
+                </Field>
+                <Field label="الاسم الأخير">
+                  <input name="lastName" value={form.lastName} onChange={handleChange} className={cls} placeholder="أدخل اسمك الأخير" />
+                </Field>
+                <Field label="البريد الإلكتروني">
+                  <input name="email" type="email" value={form.email} onChange={handleChange} className={cls} placeholder="example@email.com" />
+                </Field>
+                <Field label="رقم الهاتف">
+                  <input name="phone" value={form.phone} onChange={handleChange} className={cls} placeholder="+963 xxx xxx xxx" />
+                </Field>
+                <Field label="الجنس">
+                  <select name="gender" value={form.gender} onChange={handleChange} className={cls}>
+                    <option value="">اختر الجنس</option>
                     <option value="male">ذكر</option>
                     <option value="female">أنثى</option>
                   </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--lux-black)] mb-1">تاريخ الميلاد</label>
-                  <input name="birthDate" type="date" value={form.birthDate} onChange={handleChange} className="w-full border border-gray-200 rounded-lg px-4 py-3 text-right focus:outline-none focus:border-[var(--gold)] transition" />
-                </div>
-
+                </Field>
+                <Field label="تاريخ الميلاد">
+                  <input name="birthDate" type="date" value={form.birthDate} onChange={handleChange} className={cls} />
+                </Field>
+                <Field label="كلمة المرور">
+                  <input name="password" type="password" value={form.password} onChange={handleChange} className={cls} placeholder="8 أحرف على الأقل" />
+                </Field>
+                <Field label="تأكيد كلمة المرور">
+                  <input name="confirmPassword" type="password" value={form.confirmPassword} onChange={handleChange} className={cls} placeholder="أعد كتابة كلمة المرور" />
+                </Field>
                 <div className="md:col-span-2 flex justify-start mt-2">
                   <button onClick={handleNextStep} className="bg-[var(--gold)] text-white px-10 py-3 rounded-lg font-semibold hover:opacity-90 transition">
                     التالي ←
@@ -228,44 +217,39 @@ body: JSON.stringify({
               </div>
             )}
 
+            {/* الخطوة الثانية */}
             {step === 2 && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div>
-                  <label className="block text-sm font-medium text-[var(--lux-black)] mb-1">الجنسية</label>
-                  <input name="nationality" value={form.nationality} onChange={handleChange} className="w-full border border-gray-200 rounded-lg px-4 py-3 text-right focus:outline-none focus:border-[var(--gold)] transition" placeholder="مثال: سوري" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--lux-black)] mb-1">بلد الإقامة <span className="text-red-500">*</span></label>
-                  <input name="residenceCountry" value={form.residenceCountry} onChange={handleChange} className="w-full border border-gray-200 rounded-lg px-4 py-3 text-right focus:outline-none focus:border-[var(--gold)] transition" placeholder="مثال: تركيا" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--lux-black)] mb-1">المستوى التعليمي</label>
-                  <select name="educationLevel" value={form.educationLevel} onChange={handleChange} className="w-full border border-gray-200 rounded-lg px-4 py-3 text-right focus:outline-none focus:border-[var(--gold)] transition bg-white">
-                    <option value="">اختر</option>
+                <Field label="الجنسية">
+                  <input name="nationality" value={form.nationality} onChange={handleChange} className={cls} placeholder="مثال: سوري" />
+                </Field>
+                <Field label="بلد الإقامة">
+                  <input name="residenceCountry" value={form.residenceCountry} onChange={handleChange} className={cls} placeholder="مثال: تركيا" />
+                </Field>
+                <Field label="المستوى التعليمي">
+                  <select name="educationLevel" value={form.educationLevel} onChange={handleChange} className={cls}>
+                    <option value="">اختر المستوى</option>
                     <option value="primary">ابتدائي</option>
                     <option value="intermediate">إعدادي</option>
                     <option value="secondary">ثانوي</option>
                     <option value="university">جامعي</option>
                     <option value="postgraduate">دراسات عليا</option>
                   </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--lux-black)] mb-1">رقم أو معرف التليجرام <span className="text-red-500">*</span></label>
-                  <input name="telegram" value={form.telegram} onChange={handleChange} className="w-full border border-gray-200 rounded-lg px-4 py-3 text-right focus:outline-none focus:border-[var(--gold)] transition" placeholder="@username أو رقم الهاتف" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--lux-black)] mb-1">كيف عرفت المعهد؟</label>
-                  <select name="howDidYouKnow" value={form.howDidYouKnow} onChange={handleChange} className="w-full border border-gray-200 rounded-lg px-4 py-3 text-right focus:outline-none focus:border-[var(--gold)] transition bg-white">
+                </Field>
+                <Field label="رقم أو معرف التليجرام">
+                  <input name="telegram" value={form.telegram} onChange={handleChange} className={cls} placeholder="@username أو رقم الهاتف" />
+                </Field>
+                <Field label="كيف عرفت المعهد؟">
+                  <select name="howDidYouKnow" value={form.howDidYouKnow} onChange={handleChange} className={cls}>
                     <option value="">اختر</option>
                     <option value="social_media">وسائل التواصل الاجتماعي</option>
                     <option value="friend">عن طريق صديق</option>
                     <option value="search_engine">محرك البحث</option>
                     <option value="other">أخرى</option>
                   </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--lux-black)] mb-1">كم ساعة يمكنك توفيرها يومياً؟</label>
-                  <select name="availableHours" value={form.availableHours} onChange={handleChange} className="w-full border border-gray-200 rounded-lg px-4 py-3 text-right focus:outline-none focus:border-[var(--gold)] transition bg-white">
+                </Field>
+                <Field label="كم ساعة يمكنك توفيرها يومياً؟">
+                  <select name="availableHours" value={form.availableHours} onChange={handleChange} className={cls}>
                     <option value="">اختر</option>
                     <option value="one">ساعة واحدة</option>
                     <option value="two">ساعتان</option>
@@ -273,7 +257,7 @@ body: JSON.stringify({
                     <option value="four">4 ساعات</option>
                     <option value="five_plus">5 ساعات أو أكثر</option>
                   </select>
-                </div>
+                </Field>
 
                 <div className="md:col-span-2 flex flex-col gap-3">
                   <label className="flex items-center gap-3 cursor-pointer">
@@ -286,7 +270,9 @@ body: JSON.stringify({
                   </label>
                   <label className="flex items-center gap-3 cursor-pointer">
                     <input type="checkbox" name="agreeToTerms" checked={form.agreeToTerms} onChange={handleChange} className="w-4 h-4 accent-[var(--gold)]" />
-                    <span className="text-sm text-[var(--lux-black)]">أوافق على سياسة الخصوصية والشروط والأحكام ولائحة المعهد <span className="text-red-500">*</span></span>
+                    <span className="text-sm text-[var(--lux-black)]">
+                      أوافق على سياسة الخصوصية والشروط والأحكام ولائحة المعهد <span className="text-red-500">*</span>
+                    </span>
                   </label>
                 </div>
 
@@ -324,5 +310,18 @@ body: JSON.stringify({
 
       </div>
     </main>
+  );
+}
+
+const cls = "w-full border border-gray-200 rounded-lg px-4 py-3 text-right text-[var(--lux-black)] bg-white focus:outline-none focus:border-[var(--gold)] transition";
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-[var(--lux-black)] mb-1">
+        {label} <span className="text-red-500">*</span>
+      </label>
+      {children}
+    </div>
   );
 }
