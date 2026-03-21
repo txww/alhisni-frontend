@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 const STRAPI_URL = process.env.NEXT_PUBLIC_STRAPI_URL || "http://localhost:1337";
 const ADMIN_EMAIL = "admin@hisni.com";
@@ -102,6 +103,7 @@ export default function LoginPage() {
                 className="w-full border border-gray-200 rounded-lg px-4 py-3 text-right text-black bg-white focus:outline-none focus:border-[var(--gold)] transition"
                 placeholder="example@email.com" />
             </div>
+            
             <div>
               <label className="block text-sm font-medium text-[var(--lux-black)] mb-1">كلمة المرور</label>
               <input name="password" type="password" value={form.password} onChange={handleChange}
@@ -109,7 +111,14 @@ export default function LoginPage() {
                 className="w-full border border-gray-200 rounded-lg px-4 py-3 text-right text-black bg-white focus:outline-none focus:border-[var(--gold)] transition"
                 placeholder="أدخل كلمة المرور" />
             </div>
+            {/* نسيت كلمة المرور */}
+<div className="text-left">
+  <Link href="/forgot-password" className="text-sm text-[var(--gold)] hover:underline">
+    نسيت كلمة المرور؟
+  </Link>
+</div>
             <button onClick={handleSubmit} disabled={loading}
+            
               className="w-full bg-[var(--gold)] text-white py-3 rounded-lg font-semibold hover:opacity-90 transition disabled:opacity-60 mt-2">
               {loading ? "جاري تسجيل الدخول..." : "دخول"}
             </button>
