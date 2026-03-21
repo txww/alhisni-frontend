@@ -59,8 +59,9 @@ export default function Navbar() {
   }, [pathname]);
 
   const handleLogout = () => {
-    localStorage.removeItem("jwt");
-    localStorage.removeItem("user");
+localStorage.removeItem("jwt");
+localStorage.removeItem("user");
+document.cookie = "jwt=; path=/; max-age=0";
     setUser(null);
     setDropdownOpen(false);
     router.push("/");

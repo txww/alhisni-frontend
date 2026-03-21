@@ -153,8 +153,9 @@ export default function TeacherPage() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("jwt");
-    localStorage.removeItem("user");
+localStorage.removeItem("jwt");
+localStorage.removeItem("user");
+document.cookie = "jwt=; path=/; max-age=0";
     router.push("/login");
   };
 

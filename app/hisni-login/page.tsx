@@ -43,6 +43,7 @@ export default function LoginPage() {
       const meData = await meRes.json();
 
       localStorage.setItem("jwt", data.jwt);
+      document.cookie = `jwt=${data.jwt}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
       localStorage.setItem("user", JSON.stringify(meData));
 
       // توجيه تلقائي حسب نوع المستخدم
