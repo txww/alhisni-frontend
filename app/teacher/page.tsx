@@ -1,16 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 const STRAPI_URL = process.env.NEXT_PUBLIC_STRAPI_URL || "http://localhost:1337";
 
 const yearMap: Record<string, string> = {
-  all:   "جميع السنوات",
-  year1: "السنة الأولى",
-  year2: "السنة الثانية",
-  year3: "السنة الثالثة",
-  year4: "السنة الرابعة",
-  year5: "السنة الخامسة",
+  all: "جميع السنوات", year1: "السنة الأولى", year2: "السنة الثانية",
+  year3: "السنة الثالثة", year4: "السنة الرابعة", year5: "السنة الخامسة",
 };
 
 const statusMap: Record<string, { label: string; color: string; bg: string }> = {
@@ -50,13 +47,13 @@ interface TeacherInfo {
   teacherYear?: string;
   teacherSubject?: string;
   email: string;
+  isTeacher?: boolean;
 }
 
 export default function TeacherPage() {
+  const router = useRouter();
   const [authed, setAuthed] = useState(false);
   const [checking, setChecking] = useState(true);
-  const [loginForm, setLoginForm] = useState({ email: "", password: "" });
-  const [loginError, setLoginError] = useState("");
   const [teacherInfo, setTeacherInfo] = useState<TeacherInfo | null>(null);
 
   const [activeTab, setActiveTab] = useState<"students" | "sessions" | "add">("students");
@@ -72,58 +69,35 @@ export default function TeacherPage() {
   const [editingSession, setEditingSession] = useState<ZoomSession | null>(null);
 
   const inp = "w-full border border-gray-200 rounded-lg px-4 py-3 text-right text-black bg-white focus:outline-none focus:border-[var(--gold)] transition";
+  const getJwt = () => localStorage.getItem("jwt") || "";
 
+  // التحقق من الجلسة عند التحميل
   useEffect(() => {
-    const jwt = localStorage.getItem("teacherJwt");
-    if (!jwt) { setChecking(false); return; }
-    // تحقق من بيانات المدرس
+    const jwt = localStorage.getItem("jwt");
+    if (!jwt) { setChecking(false); router.push("/login"); return; }
+
     fetch(`${STRAPI_URL}/api/users/me`, { headers: { Authorization: `Bearer ${jwt}` } })
       .then(r => r.json())
       .then(data => {
-        if (data?.isTeacher) {
+        if (data?.isTeacher === true) {
           setTeacherInfo(data);
-          const yr = data.teacherYear || "year1";
-          setSessionForm(p => ({ ...p, academicYear: yr }));
+          setSessionForm(p => ({ ...p, academicYear: data.teacherYear || "year1" }));
           setAuthed(true);
         } else {
-          localStorage.removeItem("teacherJwt");
+          router.push("/login");
         }
       })
-      .catch(() => localStorage.removeItem("teacherJwt"))
+      .catch(() => router.push("/login"))
       .finally(() => setChecking(false));
-  }, []);
+  }, [router]);
 
   useEffect(() => {
-    if (authed) { fetchStudents(); fetchSessions(); }
-  }, [authed]);
-
-  const handleLogin = async () => {
-    setLoginError("");
-    const res = await fetch(`${STRAPI_URL}/api/auth/local`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ identifier: loginForm.email, password: loginForm.password }),
-    });
-    const data = await res.json();
-    if (!res.ok) { setLoginError("البريد الإلكتروني أو كلمة المرور غير صحيحة"); return; }
-
-    // تحقق أن المستخدم مدرس
-    if (!data.user?.isTeacher) {
-      setLoginError("هذا الحساب غير مصرح له بالدخول كمدرس");
-      return;
-    }
-
-    localStorage.setItem("teacherJwt", data.jwt);
-    setTeacherInfo(data.user);
-    const yr = data.user.teacherYear || "year1";
-    setSessionForm(p => ({ ...p, academicYear: yr }));
-    setAuthed(true);
-  };
+    if (authed && teacherInfo) { fetchStudents(); fetchSessions(); }
+  }, [authed, teacherInfo]);
 
   const fetchStudents = async () => {
     setLoading(true);
-    const jwt = localStorage.getItem("teacherJwt");
-    const res = await fetch(`${STRAPI_URL}/api/users?populate=*`, { headers: { Authorization: `Bearer ${jwt}` } });
+    const res = await fetch(`${STRAPI_URL}/api/users?populate=*`, { headers: { Authorization: `Bearer ${getJwt()}` } });
     const data = await res.json();
     const teacherYear = teacherInfo?.teacherYear || "year1";
     const all: Student[] = Array.isArray(data)
@@ -134,8 +108,7 @@ export default function TeacherPage() {
   };
 
   const fetchSessions = async () => {
-    const jwt = localStorage.getItem("teacherJwt");
-    const res = await fetch(`${STRAPI_URL}/api/zoom-sessions?sort=date:desc`, { headers: { Authorization: `Bearer ${jwt}` } });
+    const res = await fetch(`${STRAPI_URL}/api/zoom-sessions?sort=date:desc`, { headers: { Authorization: `Bearer ${getJwt()}` } });
     const data = await res.json();
     const teacherYear = teacherInfo?.teacherYear || "year1";
     const all: ZoomSession[] = Array.isArray(data?.data)
@@ -147,12 +120,11 @@ export default function TeacherPage() {
   const saveSession = async () => {
     if (!sessionForm.title || !sessionForm.date || !sessionForm.zoomLink) { setMsg("يرجى ملء جميع الحقول المطلوبة"); return; }
     setSaving(true);
-    const jwt = localStorage.getItem("teacherJwt");
     const id = editingSession?.documentId || editingSession?.id;
     const url = editingSession ? `${STRAPI_URL}/api/zoom-sessions/${id}` : `${STRAPI_URL}/api/zoom-sessions`;
     const res = await fetch(url, {
       method: editingSession ? "PUT" : "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwt}` },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${getJwt()}` },
       body: JSON.stringify({ data: sessionForm }),
     });
     if (!res.ok) { setMsg("حدث خطأ، يرجى المحاولة مجدداً"); setSaving(false); return; }
@@ -167,9 +139,8 @@ export default function TeacherPage() {
 
   const deleteSession = async (session: ZoomSession) => {
     if (!confirm("هل تريد حذف هذه الجلسة؟")) return;
-    const jwt = localStorage.getItem("teacherJwt");
     await fetch(`${STRAPI_URL}/api/zoom-sessions/${session.documentId || session.id}`, {
-      method: "DELETE", headers: { Authorization: `Bearer ${jwt}` },
+      method: "DELETE", headers: { Authorization: `Bearer ${getJwt()}` },
     });
     await fetchSessions();
   };
@@ -181,9 +152,14 @@ export default function TeacherPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem("jwt");
+    localStorage.removeItem("user");
+    router.push("/login");
+  };
+
   const teacherName = `${teacherInfo?.firstName || ""} ${teacherInfo?.lastName || ""}`.trim() || teacherInfo?.email || "";
   const teacherYear = teacherInfo?.teacherYear || "year1";
-
   const filteredStudents = students.filter(s =>
     `${s.firstName || ""} ${s.lastName || ""} ${s.email}`.toLowerCase().includes(search.toLowerCase())
   );
@@ -194,23 +170,7 @@ export default function TeacherPage() {
     </main>
   );
 
-  if (!authed) return (
-    <main className="min-h-screen bg-[var(--lux-black)] flex items-center justify-center px-4">
-      <div className="bg-white rounded-2xl shadow-xl p-10 w-full max-w-sm text-center">
-        <div className="w-16 h-16 rounded-full border-4 border-[var(--gold)] flex items-center justify-center mx-auto mb-4">
-          <span className="text-[var(--gold)] text-2xl font-bold">ح</span>
-        </div>
-        <h2 className="text-xl font-bold text-[var(--lux-black)] mb-1">بوابة المدرسين</h2>
-        <p className="text-[var(--text-gray)] text-sm mb-6">معهد الإمام تقي الدين الحصني</p>
-        {loginError && <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">{loginError}</div>}
-        <div className="flex flex-col gap-3 mb-4">
-          <input type="email" value={loginForm.email} onChange={(e) => setLoginForm(p => ({ ...p, email: e.target.value }))} placeholder="البريد الإلكتروني" className={inp} />
-          <input type="password" value={loginForm.password} onChange={(e) => setLoginForm(p => ({ ...p, password: e.target.value }))} onKeyDown={(e) => e.key === "Enter" && handleLogin()} placeholder="كلمة المرور" className={inp} />
-        </div>
-        <button onClick={handleLogin} className="w-full bg-[var(--gold)] text-white py-3 rounded-lg font-semibold hover:opacity-90 transition">دخول</button>
-      </div>
-    </main>
-  );
+  if (!authed) return null;
 
   return (
     <main className="min-h-screen bg-[var(--soft-white)] py-8 px-4">
@@ -221,8 +181,7 @@ export default function TeacherPage() {
             <h1 className="text-2xl font-bold text-[var(--lux-black)]">{teacherName}</h1>
             <p className="text-[var(--text-gray)] text-sm">{teacherInfo?.teacherSubject} — {yearMap[teacherYear]}</p>
           </div>
-          <button onClick={() => { localStorage.removeItem("teacherJwt"); setAuthed(false); setTeacherInfo(null); }}
-            className="border border-gray-300 text-[var(--text-gray)] px-5 py-2 rounded-lg text-sm hover:bg-gray-100 transition">خروج</button>
+          <button onClick={handleLogout} className="border border-gray-300 text-[var(--text-gray)] px-5 py-2 rounded-lg text-sm hover:bg-gray-100 transition">خروج</button>
         </div>
 
         {/* Stats */}
@@ -242,11 +201,7 @@ export default function TeacherPage() {
 
         {/* Tabs */}
         <div className="flex gap-2 mb-6">
-          {[
-            { id: "students", label: "طلابي", icon: "👥" },
-            { id: "sessions", label: "جلساتي", icon: "🎥" },
-            { id: "add", label: editingSession ? "تعديل جلسة" : "إضافة جلسة", icon: "➕" },
-          ].map((tab) => (
+          {[{ id: "students", label: "طلابي", icon: "👥" }, { id: "sessions", label: "جلساتي", icon: "🎥" }, { id: "add", label: editingSession ? "تعديل جلسة" : "إضافة جلسة", icon: "➕" }].map((tab) => (
             <button key={tab.id}
               onClick={() => { setActiveTab(tab.id as "students" | "sessions" | "add"); if (tab.id !== "add") setEditingSession(null); }}
               className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition ${activeTab === tab.id ? "bg-[var(--gold)] text-white" : "bg-white border border-gray-200 text-[var(--text-gray)]"}`}>
@@ -285,14 +240,11 @@ export default function TeacherPage() {
                   </div>
                 )}
             </div>
-
             {selectedStudent && (
               <div className="w-72 bg-white rounded-2xl shadow-sm p-6 h-fit sticky top-8">
                 <div className="text-center mb-4">
                   <div className="w-12 h-12 rounded-full bg-[var(--lux-black)] flex items-center justify-center mx-auto mb-2">
-                    <span className="text-[var(--gold)] text-lg font-bold">
-                      {(`${selectedStudent.firstName || ""} ${selectedStudent.lastName || ""}`.trim() || selectedStudent.email).charAt(0)}
-                    </span>
+                    <span className="text-[var(--gold)] text-lg font-bold">{(`${selectedStudent.firstName || ""} ${selectedStudent.lastName || ""}`.trim() || selectedStudent.email).charAt(0)}</span>
                   </div>
                   <h3 className="font-bold text-[var(--lux-black)] text-sm">{`${selectedStudent.firstName || ""} ${selectedStudent.lastName || ""}`.trim() || selectedStudent.email}</h3>
                   <p className="text-xs text-[var(--text-gray)]">{selectedStudent.email}</p>
@@ -326,9 +278,7 @@ export default function TeacherPage() {
                           {!session.isActive && <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">مخفية</span>}
                           {isPast && <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">انتهت</span>}
                         </div>
-                        <p className="text-sm text-[var(--text-gray)]">
-                          {new Date(session.date).toLocaleDateString("ar-SA", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                        </p>
+                        <p className="text-sm text-[var(--text-gray)]">{new Date(session.date).toLocaleDateString("ar-SA", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
                         <a href={session.zoomLink} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline truncate max-w-48 mt-1 block">{session.zoomLink}</a>
                       </div>
                       <div className="flex flex-col gap-2 shrink-0">
@@ -348,9 +298,7 @@ export default function TeacherPage() {
           <div className="bg-white rounded-2xl shadow-sm p-6">
             <h3 className="font-bold text-[var(--lux-black)] mb-5">{editingSession ? "تعديل الجلسة" : "إضافة جلسة جديدة"}</h3>
             {msg && (
-              <div className={`mb-4 p-3 rounded-lg text-sm text-center ${msg.includes("خطأ") || msg.includes("يرجى") ? "bg-red-50 border border-red-200 text-red-600" : "bg-green-50 border border-green-200 text-green-600"}`}>
-                {msg}
-              </div>
+              <div className={`mb-4 p-3 rounded-lg text-sm text-center ${msg.includes("خطأ") || msg.includes("يرجى") ? "bg-red-50 border border-red-200 text-red-600" : "bg-green-50 border border-green-200 text-green-600"}`}>{msg}</div>
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
@@ -389,7 +337,6 @@ export default function TeacherPage() {
             </div>
           </div>
         )}
-
       </div>
     </main>
   );

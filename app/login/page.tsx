@@ -4,16 +4,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 const STRAPI_URL = process.env.NEXT_PUBLIC_STRAPI_URL || "http://localhost:1337";
+const ADMIN_EMAIL = "admin@hisni.com";
 
 export default function LoginPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
-  const [form, setForm] = useState({
-    email: "",
-    password: "",
-  });
+  const [form, setForm] = useState({ email: "", password: "" });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -29,10 +26,7 @@ export default function LoginPage() {
       const res = await fetch(`${STRAPI_URL}/api/auth/local`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          identifier: form.email,
-          password: form.password,
-        }),
+        body: JSON.stringify({ identifier: form.email, password: form.password }),
       });
 
       const data = await res.json();
@@ -42,10 +36,24 @@ export default function LoginPage() {
         return;
       }
 
-      localStorage.setItem("jwt", data.jwt);
-      localStorage.setItem("user", JSON.stringify(data.user));
+      // جلب بيانات المستخدم الكاملة مع isTeacher
+      const meRes = await fetch(`${STRAPI_URL}/api/users/me`, {
+        headers: { Authorization: `Bearer ${data.jwt}` },
+      });
+      const meData = await meRes.json();
 
-      router.push("/dashboard");
+      localStorage.setItem("jwt", data.jwt);
+      localStorage.setItem("user", JSON.stringify(meData));
+
+      // توجيه تلقائي حسب نوع المستخدم
+      if (meData.email === ADMIN_EMAIL) {
+        router.push("/hisni-control-panel/students");
+      } else if (meData.isTeacher === true) {
+        router.push("/teacher");
+      } else {
+        router.push("/dashboard");
+      }
+
     } catch {
       setError("تعذّر الاتصال بالخادم، يرجى المحاولة لاحقاً");
     } finally {
@@ -64,9 +72,7 @@ export default function LoginPage() {
               <span className="text-[var(--gold)] text-4xl font-bold">ح</span>
             </div>
             <h3 className="text-xl font-bold mb-2">أهلاً بعودتك</h3>
-            <p className="text-gray-400 text-sm leading-relaxed">
-              سجّل دخولك للوصول إلى لوحة التحكم الخاصة بك
-            </p>
+            <p className="text-gray-400 text-sm leading-relaxed">سجّل دخولك للوصول إلى لوحة التحكم الخاصة بك</p>
           </div>
           <div className="border-t border-gray-700 pt-6">
             <p className="text-gray-400 text-sm mb-3">ليس لديك حساب؟</p>
@@ -84,60 +90,34 @@ export default function LoginPage() {
           </div>
 
           {error && (
-            <div className="mb-5 p-4 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm text-right">
-              {error}
-            </div>
+            <div className="mb-5 p-4 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm text-right">{error}</div>
           )}
 
           <div className="flex flex-col gap-4">
             <div>
               <label className="block text-sm font-medium text-[var(--lux-black)] mb-1">البريد الإلكتروني</label>
-              <input
-                name="email"
-                type="email"
-                value={form.email}
-                onChange={handleChange}
+              <input name="email" type="email" value={form.email} onChange={handleChange}
                 onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
                 className="w-full border border-gray-200 rounded-lg px-4 py-3 text-right text-black bg-white focus:outline-none focus:border-[var(--gold)] transition"
-                placeholder="example@email.com"
-              />
+                placeholder="example@email.com" />
             </div>
             <div>
               <label className="block text-sm font-medium text-[var(--lux-black)] mb-1">كلمة المرور</label>
-              <input
-                name="password"
-                type="password"
-                value={form.password}
-                onChange={handleChange}
+              <input name="password" type="password" value={form.password} onChange={handleChange}
                 onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
                 className="w-full border border-gray-200 rounded-lg px-4 py-3 text-right text-black bg-white focus:outline-none focus:border-[var(--gold)] transition"
-                placeholder="أدخل كلمة المرور"
-              />
+                placeholder="أدخل كلمة المرور" />
             </div>
-
-            <div className="text-left">
-              <a href="/forgot-password" className="text-sm text-[var(--gold)] hover:underline">
-                نسيت كلمة المرور؟
-              </a>
-            </div>
-
-            <button
-              onClick={handleSubmit}
-              disabled={loading}
-              className="w-full bg-[var(--gold)] text-white py-3 rounded-lg font-semibold hover:opacity-90 transition disabled:opacity-60 mt-2"
-            >
+            <button onClick={handleSubmit} disabled={loading}
+              className="w-full bg-[var(--gold)] text-white py-3 rounded-lg font-semibold hover:opacity-90 transition disabled:opacity-60 mt-2">
               {loading ? "جاري تسجيل الدخول..." : "دخول"}
             </button>
-
             <p className="text-center text-sm text-[var(--text-gray)] lg:hidden">
               ليس لديك حساب؟{" "}
-              <a href="/register" className="text-[var(--gold)] font-semibold hover:underline">
-                سجّل الآن
-              </a>
+              <a href="/register" className="text-[var(--gold)] font-semibold hover:underline">سجّل الآن</a>
             </p>
           </div>
         </div>
-
       </div>
     </main>
   );
