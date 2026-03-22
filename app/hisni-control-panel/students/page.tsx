@@ -64,25 +64,41 @@ const exportCSV = (students: Student[]) => {
   URL.revokeObjectURL(url);
 };
 
-type Tab = "students" | "teachers" | "sessions";
+type Tab = "overview" | "students" | "teachers" | "sessions";
 const sidebarItems: { id: Tab; label: string; icon: string }[] = [
-  { id: "students", label: "الطلاب",      icon: "👥" },
-  { id: "teachers", label: "المدرسون",    icon: "👨‍🏫" },
-  { id: "sessions", label: "جلسات Zoom",  icon: "🎥" },
+  { id: "overview",  label: "نظرة عامة",   icon: "📊" },
+  { id: "students",  label: "الطلاب",       icon: "👥" },
+  { id: "teachers",  label: "المدرسون",     icon: "👨‍🏫" },
+  { id: "sessions",  label: "جلسات Zoom",   icon: "🎥" },
 ];
 
 const inp = "w-full border border-gray-200 rounded-lg px-3 py-2 text-right text-black bg-white focus:outline-none focus:border-[var(--gold)] transition text-sm";
+
+// مكون شريط بياني بسيط
+function Bar({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
+  const pct = max > 0 ? Math.round((value / max) * 100) : 0;
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-xs text-[var(--text-gray)] w-24 text-right shrink-0">{label}</span>
+      <div className="flex-1 bg-gray-100 rounded-full h-2">
+        <div className={`h-2 rounded-full transition-all duration-500 ${color}`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="text-xs font-bold text-[var(--lux-black)] w-6 text-left shrink-0">{value}</span>
+    </div>
+  );
+}
 
 export default function AdminPage() {
   const router = useRouter();
   const [authed, setAuthed] = useState(false);
   const [checking, setChecking] = useState(true);
-  const [activeTab, setActiveTab] = useState<Tab>("students");
+  const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const [students, setStudents] = useState<Student[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [filter, setFilter] = useState("all");
+  const [yearFilter, setYearFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Student | null>(null);
   const [updating, setUpdating] = useState(false);
@@ -164,7 +180,7 @@ export default function AdminPage() {
           : `<div dir="rtl" style="font-family:Arial;text-align:right;padding:20px;"><h2 style="color:#C6A85B;">معهد الإمام تقي الدين الحصني</h2><p>أخي الكريم <strong>${name}</strong>،</p><p>نأسف، لم يتم قبول طلبك في هذه المرحلة.</p><p style="color:#666;font-size:14px;">— فريق معهد الإمام الحصني</p></div>`;
         await sendNotification({ type: "both", telegramMessage: tgMsg, emailTo: student.email, emailSubject, emailBody });
       } else { await sendNotification({ type: "telegram", telegramMessage: tgMsg }); }
-      setStatusMsg(`تم التحديث وإرسال الإشعارات ✓`);
+      setStatusMsg("تم التحديث وإرسال الإشعارات ✓");
       setTimeout(() => setStatusMsg(""), 4000);
     }
     await fetchStudents();
@@ -230,8 +246,15 @@ export default function AdminPage() {
 
   const filtered = students.filter(s => {
     const mf = filter === "all" || s.registrationStatus === filter;
-    return mf && `${s.firstName || ""} ${s.lastName || ""} ${s.email}`.toLowerCase().includes(search.toLowerCase());
+    const yf = yearFilter === "all" || s.academicYear === yearFilter;
+    return mf && yf && `${s.firstName || ""} ${s.lastName || ""} ${s.email}`.toLowerCase().includes(search.toLowerCase());
   });
+
+  // إحصائيات للتقارير
+  const approvedCount = students.filter(s => s.registrationStatus === "approved").length;
+  const pendingCount = students.filter(s => s.registrationStatus === "pending").length;
+  const rejectedCount = students.filter(s => s.registrationStatus === "rejected").length;
+  const upcomingSessions = sessions.filter(s => new Date(s.date) >= new Date()).length;
 
   if (checking) return <main className="min-h-screen bg-[var(--lux-black)] flex items-center justify-center"><div className="text-[var(--gold)]">جاري التحقق...</div></main>;
   if (!authed) return null;
@@ -259,7 +282,6 @@ export default function AdminPage() {
       </header>
 
       <div className="flex flex-1">
-        {/* Overlay mobile */}
         {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-30 lg:hidden" onClick={() => setSidebarOpen(false)} />}
 
         {/* Sidebar */}
@@ -271,11 +293,11 @@ export default function AdminPage() {
                 <p className="text-white/50 text-xs mt-0.5">طالب</p>
               </div>
               <div className="bg-white/5 rounded-xl p-3 text-center">
-                <p className="text-yellow-400 font-bold text-xl">{students.filter(s => s.registrationStatus === "pending").length}</p>
+                <p className="text-yellow-400 font-bold text-xl">{pendingCount}</p>
                 <p className="text-white/50 text-xs mt-0.5">بانتظار</p>
               </div>
               <div className="bg-white/5 rounded-xl p-3 text-center">
-                <p className="text-green-400 font-bold text-xl">{students.filter(s => s.registrationStatus === "approved").length}</p>
+                <p className="text-green-400 font-bold text-xl">{approvedCount}</p>
                 <p className="text-white/50 text-xs mt-0.5">مقبول</p>
               </div>
               <div className="bg-white/5 rounded-xl p-3 text-center">
@@ -290,12 +312,10 @@ export default function AdminPage() {
             {sidebarItems.map((item) => (
               <button key={item.id} onClick={() => { setActiveTab(item.id); setSidebarOpen(false); setSelected(null); }}
                 className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition mb-1 text-right ${activeTab === item.id ? "bg-[var(--gold)] text-black" : "text-white/70 hover:bg-white/5 hover:text-white"}`}>
-                <span className="text-base">{item.icon}</span>
+                <span>{item.icon}</span>
                 {item.label}
-                {item.id === "students" && students.filter(s => s.registrationStatus === "pending").length > 0 && (
-                  <span className={`mr-auto text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === item.id ? "bg-black/20 text-black" : "bg-yellow-400 text-black"}`}>
-                    {students.filter(s => s.registrationStatus === "pending").length}
-                  </span>
+                {item.id === "students" && pendingCount > 0 && (
+                  <span className={`mr-auto text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === item.id ? "bg-black/20 text-black" : "bg-yellow-400 text-black"}`}>{pendingCount}</span>
                 )}
               </button>
             ))}
@@ -315,12 +335,138 @@ export default function AdminPage() {
             <p className="text-[var(--text-gray)] text-sm">معهد الإمام تقي الدين الحصني</p>
           </div>
 
+          {/* ===== نظرة عامة ===== */}
+          {activeTab === "overview" && (
+            <div className="space-y-5">
+              {/* Stats Cards */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[
+                  { label: "إجمالي الطلاب", value: students.length, icon: "👥", color: "text-[var(--gold)]", bg: "bg-[var(--gold)]/10" },
+                  { label: "قيد المراجعة", value: pendingCount, icon: "⏳", color: "text-yellow-600", bg: "bg-yellow-50" },
+                  { label: "مقبولون", value: approvedCount, icon: "✅", color: "text-green-600", bg: "bg-green-50" },
+                  { label: "جلسات قادمة", value: upcomingSessions, icon: "🎥", color: "text-blue-600", bg: "bg-blue-50" },
+                ].map((stat) => (
+                  <div key={stat.label} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+                    <div className={`w-10 h-10 rounded-xl ${stat.bg} flex items-center justify-center mb-3 text-xl`}>{stat.icon}</div>
+                    <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
+                    <p className="text-[var(--text-gray)] text-sm mt-1">{stat.label}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* توزيع الحالات */}
+                <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+                  <h3 className="font-bold text-[var(--lux-black)] mb-4">📊 توزيع حالات الطلاب</h3>
+                  <div className="space-y-3">
+                    <Bar label="مقبول" value={approvedCount} max={students.length} color="bg-green-500" />
+                    <Bar label="قيد المراجعة" value={pendingCount} max={students.length} color="bg-yellow-400" />
+                    <Bar label="مرفوض" value={rejectedCount} max={students.length} color="bg-red-400" />
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-gray-100 flex justify-between text-xs text-[var(--text-gray)]">
+                    <span>نسبة القبول: <strong className="text-green-600">{students.length > 0 ? Math.round((approvedCount / students.length) * 100) : 0}%</strong></span>
+                    <span>الإجمالي: <strong>{students.length}</strong></span>
+                  </div>
+                </div>
+
+                {/* توزيع السنوات */}
+                <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+                  <h3 className="font-bold text-[var(--lux-black)] mb-4">📚 توزيع السنوات الدراسية</h3>
+                  <div className="space-y-3">
+                    {Object.entries(yearMap).map(([key, label]) => {
+                      const count = students.filter(s => s.academicYear === key).length;
+                      return <Bar key={key} label={label} value={count} max={students.length} color="bg-[var(--gold)]" />;
+                    })}
+                  </div>
+                </div>
+
+                {/* الجنسيات */}
+                <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+                  <h3 className="font-bold text-[var(--lux-black)] mb-4">🌍 أبرز الجنسيات</h3>
+                  <div className="space-y-3">
+                    {(() => {
+                      const nat: Record<string, number> = {};
+                      students.forEach(s => { if (s.nationality) nat[s.nationality] = (nat[s.nationality] || 0) + 1; });
+                      return Object.entries(nat).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([n, c]) => (
+                        <Bar key={n} label={n} value={c} max={students.length} color="bg-blue-400" />
+                      ));
+                    })()}
+                    {students.filter(s => !s.nationality).length > 0 && (
+                      <Bar label="غير محدد" value={students.filter(s => !s.nationality).length} max={students.length} color="bg-gray-300" />
+                    )}
+                  </div>
+                </div>
+
+                {/* الجلسات القادمة */}
+                <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+                  <h3 className="font-bold text-[var(--lux-black)] mb-4">🗓️ الجلسات القادمة</h3>
+                  {sessions.filter(s => new Date(s.date) >= new Date()).length === 0 ? (
+                    <div className="text-center py-6 text-[var(--text-gray)]">
+                      <p className="text-3xl mb-2">📅</p>
+                      <p className="text-sm">لا توجد جلسات قادمة</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {sessions.filter(s => new Date(s.date) >= new Date()).slice(0, 4).map(session => (
+                        <div key={session.id} className="flex items-center gap-3 p-3 bg-[var(--soft-white)] rounded-xl">
+                          <div className="w-8 h-8 rounded-lg bg-[var(--gold)]/10 flex items-center justify-center shrink-0">
+                            <span className="text-sm">🎥</span>
+                          </div>
+                          <div className="flex-1 overflow-hidden">
+                            <p className="text-sm font-medium text-[var(--lux-black)] truncate">{session.title}</p>
+                            <p className="text-xs text-[var(--text-gray)]">{new Date(session.date).toLocaleDateString("ar-SA", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
+                          </div>
+                          <span className="text-xs bg-[var(--gold)]/10 text-[var(--gold)] px-2 py-0.5 rounded-full shrink-0">{yearMap[session.academicYear]}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* آخر المسجلين */}
+              <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-bold text-[var(--lux-black)]">🆕 آخر المسجلين</h3>
+                  <button onClick={() => setActiveTab("students")} className="text-xs text-[var(--gold)] hover:underline">عرض الكل ←</button>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {students.filter(s => s.registrationStatus === "pending").slice(0, 5).map(student => {
+                    const name = `${student.firstName || ""} ${student.lastName || ""}`.trim() || student.email;
+                    return (
+                      <div key={student.id} className="flex items-center justify-between p-3 bg-[var(--soft-white)] rounded-xl">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-[var(--lux-black)] flex items-center justify-center shrink-0">
+                            <span className="text-[var(--gold)] font-bold text-xs">{name.charAt(0)}</span>
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-[var(--lux-black)]">{name}</p>
+                            <p className="text-xs text-[var(--text-gray)]">{student.email}</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => { updateStudent(student.id, { registrationStatus: "approved" }); }}
+                            className="text-xs bg-green-500 text-white px-3 py-1 rounded-lg hover:bg-green-600 transition">قبول</button>
+                          <button onClick={() => { setActiveTab("students"); setSelected(student); }}
+                            className="text-xs border border-gray-200 text-[var(--text-gray)] px-3 py-1 rounded-lg hover:bg-gray-50 transition">تفاصيل</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {students.filter(s => s.registrationStatus === "pending").length === 0 && (
+                    <div className="text-center py-6 text-[var(--text-gray)] text-sm">لا يوجد طلبات بانتظار المراجعة 🎉</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ===== الطلاب ===== */}
           {activeTab === "students" && (
             <>
               <div className="flex flex-wrap gap-3 mb-5">
                 <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="🔍 بحث بالاسم أو الإيميل..."
-                  className="border border-gray-200 rounded-xl px-4 py-2 text-right text-black bg-white focus:outline-none focus:border-[var(--gold)] transition flex-1 min-w-48" />
+                  className="border border-gray-200 rounded-xl px-4 py-2 text-right text-black bg-white focus:outline-none focus:border-[var(--gold)] transition flex-1 min-w-48 text-sm" />
                 <div className="flex gap-2 flex-wrap">
                   {["all", "pending", "approved", "rejected"].map((f) => (
                     <button key={f} onClick={() => setFilter(f)}
@@ -329,8 +475,15 @@ export default function AdminPage() {
                     </button>
                   ))}
                 </div>
+                <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)}
+                  className="border border-gray-200 rounded-xl px-3 py-2 text-right text-black bg-white focus:outline-none focus:border-[var(--gold)] transition text-xs">
+                  <option value="all">كل السنوات</option>
+                  {Object.entries(yearMap).map(([val, label]) => <option key={val} value={val}>{label}</option>)}
+                </select>
                 <button onClick={() => exportCSV(filtered)} className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium bg-green-600 text-white hover:bg-green-700 transition">📥 Excel</button>
               </div>
+
+              <p className="text-xs text-[var(--text-gray)] mb-3">{filtered.length} نتيجة</p>
 
               <div className="flex gap-5">
                 <div className="flex-1">
@@ -355,6 +508,7 @@ export default function AdminPage() {
                                     <div className="flex items-center gap-2 mt-0.5">
                                       {student.phone && <p className="text-xs text-[var(--text-gray)]">{student.phone}</p>}
                                       {student.academicYear && <span className="text-xs bg-[var(--gold)]/10 text-[var(--gold)] px-2 py-0.5 rounded-full">{yearMap[student.academicYear]}</span>}
+                                      {student.nationality && <span className="text-xs text-[var(--text-gray)]">🌍 {student.nationality}</span>}
                                     </div>
                                   </div>
                                 </div>
@@ -451,6 +605,7 @@ export default function AdminPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {teachers.map((teacher) => {
                         const name = `${teacher.firstName || ""} ${teacher.lastName || ""}`.trim() || teacher.email;
+                        const yearStudents = students.filter(s => s.academicYear === teacher.teacherYear && s.registrationStatus === "approved").length;
                         return (
                           <div key={teacher.id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 hover:border-[var(--gold)]/30 transition">
                             <div className="flex items-start justify-between">
@@ -462,7 +617,10 @@ export default function AdminPage() {
                                   <p className="font-bold text-[var(--lux-black)] text-sm">{name}</p>
                                   <p className="text-xs text-[var(--text-gray)]">{teacher.email}</p>
                                   {teacher.teacherSubject && <p className="text-xs text-[var(--gold)] mt-0.5">{teacher.teacherSubject}</p>}
-                                  {teacher.teacherYear && <span className="text-xs bg-[var(--gold)]/10 text-[var(--gold)] px-2 py-0.5 rounded-full mt-1 inline-block">{yearMap[teacher.teacherYear]}</span>}
+                                  <div className="flex items-center gap-2 mt-1">
+                                    {teacher.teacherYear && <span className="text-xs bg-[var(--gold)]/10 text-[var(--gold)] px-2 py-0.5 rounded-full">{yearMap[teacher.teacherYear]}</span>}
+                                    <span className="text-xs text-[var(--text-gray)]">👥 {yearStudents} طالب</span>
+                                  </div>
                                 </div>
                               </div>
                               <div className="flex flex-col gap-1.5 shrink-0">
