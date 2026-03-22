@@ -5,8 +5,6 @@ import { useRouter } from "next/navigation";
 
 const STRAPI_URL = process.env.NEXT_PUBLIC_STRAPI_URL || "http://localhost:1337";
 const ADMIN_EMAIL = "admin@hisni.com";
-const TG_BOT_TOKEN = process.env.NEXT_PUBLIC_TG_BOT_TOKEN || "";
-const TG_CHAT_ID = process.env.NEXT_PUBLIC_TG_CHAT_ID || "";
 
 interface Student {
   id: number; email: string; firstName?: string; lastName?: string; phone?: string;
@@ -66,28 +64,6 @@ const exportCSV = (students: Student[]) => {
   URL.revokeObjectURL(url);
 };
 
-// إرسال إشعار تلقرام للإدارة
-const sendTelegramNotification = async (message: string) => {
-  try {
-    await fetch(`https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: TG_CHAT_ID, text: message, parse_mode: "HTML" }),
-    });
-  } catch { /* silent */ }
-};
-
-// إرسال إيميل للطالب عبر Strapi
-const sendEmailToStudent = async (jwt: string, to: string, subject: string, body: string) => {
-  try {
-    await fetch(`${STRAPI_URL}/api/email`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwt}` },
-      body: JSON.stringify({ to, subject, html: body }),
-    });
-  } catch { /* silent */ }
-};
-
 const inp = "w-full border border-gray-200 rounded-lg px-3 py-2 text-right text-black bg-white focus:outline-none focus:border-[var(--gold)] transition text-sm";
 
 export default function AdminPage() {
@@ -104,7 +80,6 @@ export default function AdminPage() {
   const [updating, setUpdating] = useState(false);
   const [statusMsg, setStatusMsg] = useState("");
 
-  // رسائل مخصصة
   const [showMsgForm, setShowMsgForm] = useState(false);
   const [msgForm, setMsgForm] = useState({ subject: "", body: "" });
   const [sendingMsg, setSendingMsg] = useState(false);
@@ -138,6 +113,23 @@ export default function AdminPage() {
   useEffect(() => { if (authed) { fetchStudents(); fetchSessions(); fetchTeachers(); } }, [authed]);
 
   const getJwt = () => localStorage.getItem("jwt") || "";
+
+  // دالة موحدة للإشعارات - تمر عبر الـ server
+  const sendNotification = async (params: {
+    type: "telegram" | "email" | "both";
+    telegramMessage?: string;
+    emailTo?: string;
+    emailSubject?: string;
+    emailBody?: string;
+  }) => {
+    try {
+      await fetch("/api/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...params, jwt: getJwt() }),
+      });
+    } catch { /* silent */ }
+  };
 
   const fetchStudents = async () => {
     setLoadingStudents(true);
@@ -182,28 +174,24 @@ export default function AdminPage() {
       body: JSON.stringify(updates),
     });
 
-    // إشعارات عند تغيير الحالة
     if (updates.registrationStatus) {
       const newStatus = updates.registrationStatus;
       const statusLabel = statusMap[newStatus]?.label || newStatus;
 
-      // إشعار تلقرام للإدارة
       const tgMsg = newStatus === "approved"
         ? `✅ <b>تم قبول طالب جديد</b>\n👤 الاسم: ${name}\n📧 الإيميل: ${student?.email}\n📱 الهاتف: ${student?.phone || "-"}\n🌍 الجنسية: ${student?.nationality || "-"}`
         : newStatus === "rejected"
         ? `❌ <b>تم رفض طالب</b>\n👤 الاسم: ${name}\n📧 الإيميل: ${student?.email}`
         : `🔄 <b>تم إعادة طالب للمراجعة</b>\n👤 الاسم: ${name}`;
-      await sendTelegramNotification(tgMsg);
 
-      // إيميل للطالب عند القبول أو الرفض
       if (student?.email && (newStatus === "approved" || newStatus === "rejected")) {
         const emailSubject = newStatus === "approved"
           ? "مبارك! تم قبولك في معهد الإمام الحصني"
           : "بشأن طلب تسجيلك في معهد الإمام الحصني";
 
         const emailBody = newStatus === "approved"
-          ? `<div dir="rtl" style="font-family: Arial; text-align: right; padding: 20px;">
-              <h2 style="color: #C6A85B;">معهد الإمام تقي الدين الحصني</h2>
+          ? `<div dir="rtl" style="font-family:Arial;text-align:right;padding:20px;">
+              <h2 style="color:#C6A85B;">معهد الإمام تقي الدين الحصني</h2>
               <p>السلام عليكم ورحمة الله وبركاته،</p>
               <p>أخي الكريم <strong>${name}</strong>،</p>
               <p>🎉 يسعدنا إبلاغك بأنه <strong>تم قبول طلبك</strong> في معهد الإمام تقي الدين الحصني.</p>
@@ -211,8 +199,8 @@ export default function AdminPage() {
               <a href="https://alhisnifiqh.com/login" style="background:#C6A85B;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;display:inline-block;margin:16px 0;">تسجيل الدخول</a>
               <p style="color:#666;font-size:14px;">— فريق معهد الإمام الحصني</p>
             </div>`
-          : `<div dir="rtl" style="font-family: Arial; text-align: right; padding: 20px;">
-              <h2 style="color: #C6A85B;">معهد الإمام تقي الدين الحصني</h2>
+          : `<div dir="rtl" style="font-family:Arial;text-align:right;padding:20px;">
+              <h2 style="color:#C6A85B;">معهد الإمام تقي الدين الحصني</h2>
               <p>السلام عليكم ورحمة الله وبركاته،</p>
               <p>أخي الكريم <strong>${name}</strong>،</p>
               <p>نأسف لإبلاغك بأنه لم يتم قبول طلبك في هذه المرحلة.</p>
@@ -220,7 +208,9 @@ export default function AdminPage() {
               <p style="color:#666;font-size:14px;">— فريق معهد الإمام الحصني</p>
             </div>`;
 
-        await sendEmailToStudent(getJwt(), student.email, emailSubject, emailBody);
+        await sendNotification({ type: "both", telegramMessage: tgMsg, emailTo: student.email, emailSubject, emailBody });
+      } else {
+        await sendNotification({ type: "telegram", telegramMessage: tgMsg });
       }
 
       setStatusMsg(`تم تحديث الحالة إلى "${statusLabel}" وإرسال الإشعارات ✓`);
@@ -232,14 +222,13 @@ export default function AdminPage() {
     setUpdating(false);
   };
 
-  // إرسال رسالة مخصصة للطالب
   const sendCustomMessage = async () => {
     if (!selected || !msgForm.subject || !msgForm.body) { setMsgResult("يرجى ملء جميع الحقول"); return; }
     setSendingMsg(true);
     const name = `${selected.firstName || ""} ${selected.lastName || ""}`.trim() || selected.email;
 
-    const emailBody = `<div dir="rtl" style="font-family: Arial; text-align: right; padding: 20px;">
-      <h2 style="color: #C6A85B;">معهد الإمام تقي الدين الحصني</h2>
+    const emailBody = `<div dir="rtl" style="font-family:Arial;text-align:right;padding:20px;">
+      <h2 style="color:#C6A85B;">معهد الإمام تقي الدين الحصني</h2>
       <p>السلام عليكم ورحمة الله وبركاته،</p>
       <p>أخي الكريم <strong>${name}</strong>،</p>
       <div style="background:#f9f9f9;padding:16px;border-radius:8px;margin:16px 0;border-right:4px solid #C6A85B;">
@@ -248,10 +237,13 @@ export default function AdminPage() {
       <p style="color:#666;font-size:14px;">— فريق معهد الإمام الحصني</p>
     </div>`;
 
-    await sendEmailToStudent(getJwt(), selected.email, msgForm.subject, emailBody);
-
-    // إشعار تلقرام للإدارة
-    await sendTelegramNotification(`📨 <b>تم إرسال رسالة للطالب</b>\n👤 ${name}\n📧 ${selected.email}\n📌 الموضوع: ${msgForm.subject}`);
+    await sendNotification({
+      type: "both",
+      telegramMessage: `📨 <b>تم إرسال رسالة للطالب</b>\n👤 ${name}\n📧 ${selected.email}\n📌 الموضوع: ${msgForm.subject}`,
+      emailTo: selected.email,
+      emailSubject: msgForm.subject,
+      emailBody,
+    });
 
     setMsgResult("تم إرسال الرسالة بنجاح ✓");
     setMsgForm({ subject: "", body: "" });
@@ -401,7 +393,6 @@ export default function AdminPage() {
                   )}
               </div>
 
-              {/* بطاقة الطالب */}
               {selected && (
                 <div className="w-80 shrink-0">
                   <div className="bg-white rounded-2xl shadow-sm p-6 sticky top-8">
@@ -434,7 +425,6 @@ export default function AdminPage() {
                       </select>
                     </div>
 
-                    {/* أزرار الحالة */}
                     <div className="flex flex-col gap-2 mb-4">
                       <button onClick={() => updateStudent(selected.id, { registrationStatus: "approved" })} disabled={updating || selected.registrationStatus === "approved"}
                         className="w-full bg-green-500 text-white py-2 rounded-lg font-semibold hover:bg-green-600 transition disabled:opacity-40 text-sm">
@@ -450,22 +440,18 @@ export default function AdminPage() {
                       </button>
                     </div>
 
-                    {/* زر رسالة مخصصة */}
                     <button onClick={() => setShowMsgForm(v => !v)}
                       className="w-full border border-[var(--gold)] text-[var(--gold)] py-2 rounded-lg font-semibold hover:bg-[var(--gold)]/5 transition text-sm">
                       ✉️ إرسال رسالة مخصصة
                     </button>
 
-                    {/* نموذج الرسالة المخصصة */}
                     {showMsgForm && (
                       <div className="mt-4 pt-4 border-t border-gray-100">
                         <h4 className="font-semibold text-[var(--lux-black)] text-sm mb-3">رسالة لـ {selected.firstName || selected.email}</h4>
                         {msgResult && <div className={`mb-3 p-2 rounded-lg text-xs text-center ${msgResult.includes("خطأ") || msgResult.includes("يرجى") ? "bg-red-50 text-red-600" : "bg-green-50 text-green-600"}`}>{msgResult}</div>}
                         <div className="flex flex-col gap-2">
-                          <input value={msgForm.subject} onChange={(e) => setMsgForm(p => ({ ...p, subject: e.target.value }))}
-                            placeholder="موضوع الرسالة *" className={inp} />
-                          <textarea value={msgForm.body} onChange={(e) => setMsgForm(p => ({ ...p, body: e.target.value }))}
-                            placeholder="نص الرسالة *" rows={4} className={`${inp} resize-none`} />
+                          <input value={msgForm.subject} onChange={(e) => setMsgForm(p => ({ ...p, subject: e.target.value }))} placeholder="موضوع الرسالة *" className={inp} />
+                          <textarea value={msgForm.body} onChange={(e) => setMsgForm(p => ({ ...p, body: e.target.value }))} placeholder="نص الرسالة *" rows={4} className={`${inp} resize-none`} />
                           <button onClick={sendCustomMessage} disabled={sendingMsg}
                             className="w-full bg-[var(--gold)] text-white py-2 rounded-lg font-semibold hover:opacity-90 transition disabled:opacity-60 text-sm">
                             {sendingMsg ? "جاري الإرسال..." : "إرسال 📧"}
@@ -612,7 +598,7 @@ export default function AdminPage() {
 
 function Detail({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between border-b border-gray-50 pb-1"> 
+    <div className="flex justify-between border-b border-gray-50 pb-1">
       <span className="text-[var(--text-gray)]">{label}</span>
       <span className="font-medium text-[var(--lux-black)]">{value}</span>
     </div>
