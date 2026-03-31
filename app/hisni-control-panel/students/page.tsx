@@ -18,6 +18,11 @@ interface Teacher {
 interface ZoomSession {
   id: number; title: string; date: string; zoomLink: string; academicYear: string; isActive: boolean;
 }
+interface Section {
+  id: number; name: string; academic_year: string; gender: string;
+  teacher_id?: number; teacher_first?: string; teacher_last?: string;
+  max_students: number; student_count: number;
+}
 
 const statusMap: Record<string, { label: string; color: string; bg: string; border: string }> = {
   pending:  { label: "قيد المراجعة", color: "text-yellow-700", bg: "bg-yellow-50",  border: "border-yellow-200" },
@@ -64,11 +69,12 @@ const exportCSV = (students: Student[]) => {
   URL.revokeObjectURL(url);
 };
 
-type Tab = "overview" | "students" | "teachers" | "sessions";
+type Tab = "overview" | "students" | "teachers" | "sessions" | "sections";
 const sidebarItems: { id: Tab; label: string; icon: string }[] = [
   { id: "overview",  label: "نظرة عامة",   icon: "📊" },
   { id: "students",  label: "الطلاب",       icon: "👥" },
   { id: "teachers",  label: "المدرسون",     icon: "👨‍🏫" },
+  { id: "sections",  label: "الشعب",        icon: "🏫" },
   { id: "sessions",  label: "جلسات Zoom",   icon: "🎥" },
 ];
 
@@ -115,6 +121,16 @@ export default function AdminPage() {
   const [sessionMsg, setSessionMsg] = useState("");
   const [editingSession, setEditingSession] = useState<ZoomSession | null>(null);
 
+  // الشعب
+  const [sections, setSections] = useState<Section[]>([]);
+  const [loadingSections, setLoadingSections] = useState(false);
+  const [sectionMsg, setSectionMsg] = useState("");
+  const [showSectionForm, setShowSectionForm] = useState(false);
+  const [editingSection, setEditingSection] = useState<Section | null>(null);
+  const [sectionForm, setSectionForm] = useState({ name: "", academicYear: "year1", gender: "male", teacherId: "", maxStudents: "50" });
+  const [savingSection, setSavingSection] = useState(false);
+  const [assigningSection, setAssigningSection] = useState(false);
+
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [loadingTeachers, setLoadingTeachers] = useState(false);
   const [teacherMsg, setTeacherMsg] = useState("");
@@ -133,7 +149,7 @@ export default function AdminPage() {
       .finally(() => setChecking(false));
   }, [router]);
 
-  useEffect(() => { if (authed) { fetchStudents(); fetchSessions(); fetchTeachers(); } }, [authed]);
+  useEffect(() => { if (authed) { fetchStudents(); fetchSessions(); fetchTeachers(); fetchSections(); } }, [authed]);
 
   const getJwt = () => localStorage.getItem("jwt") || "";
 
@@ -155,6 +171,47 @@ export default function AdminPage() {
     if (Array.isArray(data)) setTeachers(data.filter((u: Teacher) => u.isTeacher === true));
     setLoadingTeachers(false);
   };
+  const fetchSections = async () => {
+    setLoadingSections(true);
+    try {
+      const res = await fetch("/api/sections", { headers: { Authorization: `Bearer ${getJwt()}` } });
+      if (!res.ok) { setSections([]); setLoadingSections(false); return; }
+      const text = await res.text();
+      if (!text) { setSections([]); setLoadingSections(false); return; }
+      const data = JSON.parse(text);
+      setSections(Array.isArray(data?.data) ? data.data : []);
+    } catch { setSections([]); }
+    setLoadingSections(false);
+  };
+
+  const saveSection = async () => {
+    if (!sectionForm.name || !sectionForm.academicYear || !sectionForm.gender) { setSectionMsg("يرجى ملء جميع الحقول"); return; }
+    setSavingSection(true);
+    const body = { name: sectionForm.name, academicYear: sectionForm.academicYear, gender: sectionForm.gender, teacherId: sectionForm.teacherId || null, maxStudents: parseInt(sectionForm.maxStudents) || 50, ...(editingSection ? { id: editingSection.id } : {}) };
+    const res = await fetch("/api/sections", { method: editingSection ? "PUT" : "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${getJwt()}` }, body: JSON.stringify(body) });
+    if (!res.ok) { setSectionMsg("حدث خطأ"); setSavingSection(false); return; }
+    setSectionMsg(editingSection ? "تم التعديل ✓" : "تمت الإضافة ✓");
+    setSectionForm({ name: "", academicYear: "year1", gender: "male", teacherId: "", maxStudents: "50" });
+    setEditingSection(null); setShowSectionForm(false);
+    await fetchSections(); setSavingSection(false);
+    setTimeout(() => setSectionMsg(""), 3000);
+  };
+
+  const deleteSection = async (id: number) => {
+    if (!confirm("حذف هذه الشعبة؟ سيتم فك ربط طلابها.")) return;
+    await fetch(`/api/sections?id=${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${getJwt()}` } });
+    await fetchSections();
+  };
+
+  const assignStudentToSection = async (studentId: number, sectionId: number | null) => {
+    setAssigningSection(true);
+    const res = await fetch("/api/sections/assign", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${getJwt()}` }, body: JSON.stringify({ studentId, sectionId }) });
+    const data = await res.json();
+    if (!res.ok) { setStatusMsg(data.error || "حدث خطأ"); } else { setStatusMsg("تم تعيين الشعبة ✓"); await fetchStudents(); await fetchSections(); }
+    setAssigningSection(false);
+    setTimeout(() => setStatusMsg(""), 3000);
+  };
+
   const fetchSessions = async () => {
     setLoadingSessions(true);
     const res = await fetch(`${STRAPI_URL}/api/zoom-sessions?sort=date:asc`, { headers: { Authorization: `Bearer ${getJwt()}` } });
@@ -548,6 +605,19 @@ export default function AdminPage() {
                       </div>
 
                       <div className="mb-3">
+                        <label className="block text-xs font-medium text-[var(--text-gray)] mb-1">الشعبة</label>
+                        <select
+                          onChange={(e) => assignStudentToSection(selected.id, e.target.value ? parseInt(e.target.value) : null)}
+                          disabled={assigningSection}
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-right text-black bg-white focus:outline-none focus:border-[var(--gold)] transition text-xs">
+                          <option value="">بدون شعبة</option>
+                          {sections.filter(s => s.gender === (selected.gender === "أنثى" ? "female" : "male") && s.academic_year === selected.academicYear).map(s => (
+                            <option key={s.id} value={s.id}>{s.name} ({s.student_count}/{s.max_students})</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="mb-3">
                         <label className="block text-xs font-medium text-[var(--text-gray)] mb-1">السنة الدراسية</label>
                         <select value={selected.academicYear || ""} onChange={(e) => updateStudent(selected.id, { academicYear: e.target.value })}
                           disabled={updating} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-right text-black bg-white focus:outline-none focus:border-[var(--gold)] transition text-xs">
@@ -654,6 +724,136 @@ export default function AdminPage() {
                       <div className="flex gap-2 mt-1">
                         <button onClick={saveTeacher} disabled={savingTeacher} className="flex-1 bg-[var(--gold)] text-black py-2 rounded-xl font-bold hover:opacity-90 transition disabled:opacity-60 text-sm">{savingTeacher ? "..." : editingTeacher ? "حفظ" : "إنشاء"}</button>
                         <button onClick={() => { setShowTeacherForm(false); setEditingTeacher(null); }} className="border border-gray-200 text-[var(--text-gray)] px-4 py-2 rounded-xl text-sm hover:bg-gray-50 transition">إلغاء</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ===== الشعب ===== */}
+          {activeTab === "sections" && (
+            <div className="flex gap-5">
+              <div className="flex-1">
+                {sectionMsg && <div className={`mb-4 p-3 rounded-xl text-sm text-center ${sectionMsg.includes("خطأ") || sectionMsg.includes("يرجى") ? "bg-red-50 border border-red-200 text-red-600" : "bg-green-50 border border-green-200 text-green-600"}`}>{sectionMsg}</div>}
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-bold text-[var(--lux-black)]">الشعب الدراسية <span className="text-[var(--gold)]">({sections.length})</span></h3>
+                  <button onClick={() => { setShowSectionForm(true); setEditingSection(null); setSectionForm({ name: "", academicYear: "year1", gender: "male", teacherId: "", maxStudents: "50" }); }}
+                    className="bg-[var(--gold)] text-black px-4 py-2 rounded-xl text-sm font-bold hover:opacity-90 transition">+ إضافة شعبة</button>
+                </div>
+
+                {/* فلتر سريع */}
+                <div className="flex gap-2 mb-4 flex-wrap">
+                  {["year1","year2","year3","year4","year5"].map(y => (
+                    <span key={y} className="text-xs bg-[var(--gold)]/10 text-[var(--gold)] px-3 py-1 rounded-full font-medium">
+                      {yearMap[y]}: {sections.filter(s => s.academic_year === y).reduce((a,s) => a + Number(s.student_count), 0)} طالب
+                    </span>
+                  ))}
+                </div>
+
+                {loadingSections ? <div className="text-center py-10 text-[var(--gold)]">جاري التحميل...</div>
+                  : sections.length === 0 ? <div className="text-center py-10 text-[var(--text-gray)]">لا توجد شعب بعد</div>
+                  : (
+                    <div className="space-y-4">
+                      {["year1","year2","year3","year4","year5"].map(year => {
+                        const yearSections = sections.filter(s => s.academic_year === year);
+                        if (yearSections.length === 0) return null;
+                        return (
+                          <div key={year}>
+                            <h4 className="font-bold text-[var(--lux-black)] text-sm mb-2 flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full bg-[var(--gold)] inline-block"/>
+                              {yearMap[year]}
+                            </h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                              {yearSections.map(section => {
+                                const pct = Math.round((Number(section.student_count) / section.max_students) * 100);
+                                const isFull = Number(section.student_count) >= section.max_students;
+                                return (
+                                  <div key={section.id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 hover:border-[var(--gold)]/30 transition">
+                                    <div className="flex items-start justify-between mb-3">
+                                      <div>
+                                        <div className="flex items-center gap-2">
+                                          <p className="font-bold text-[var(--lux-black)] text-sm">{section.name}</p>
+                                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${section.gender === "female" ? "bg-pink-100 text-pink-700" : "bg-blue-100 text-blue-700"}`}>
+                                            {section.gender === "female" ? "👩 إناث" : "👨 ذكور"}
+                                          </span>
+                                        </div>
+                                        {(section.teacher_first || section.teacher_last) && (
+                                          <p className="text-xs text-[var(--text-gray)] mt-0.5">
+                                            👨‍🏫 {section.teacher_first} {section.teacher_last}
+                                          </p>
+                                        )}
+                                      </div>
+                                      <div className="flex gap-1 shrink-0">
+                                        <button onClick={() => { setEditingSection(section); setSectionForm({ name: section.name, academicYear: section.academic_year, gender: section.gender, teacherId: section.teacher_id?.toString() || "", maxStudents: section.max_students.toString() }); setShowSectionForm(true); }}
+                                          className="text-xs border border-gray-200 px-2 py-1 rounded-lg hover:bg-gray-50 transition text-[var(--text-gray)]">✏️</button>
+                                        <button onClick={() => deleteSection(section.id)}
+                                          className="text-xs border border-red-200 px-2 py-1 rounded-lg hover:bg-red-50 transition text-red-500">🗑️</button>
+                                      </div>
+                                    </div>
+                                    {/* شريط التعبئة */}
+                                    <div className="flex items-center gap-2">
+                                      <div className="flex-1 bg-gray-100 rounded-full h-2">
+                                        <div className={`h-2 rounded-full transition-all ${isFull ? "bg-red-500" : pct > 70 ? "bg-yellow-400" : "bg-green-500"}`} style={{ width: `${pct}%` }} />
+                                      </div>
+                                      <span className={`text-xs font-bold shrink-0 ${isFull ? "text-red-600" : "text-[var(--text-gray)]"}`}>
+                                        {section.student_count}/{section.max_students}
+                                        {isFull && " 🔴 ممتلئة"}
+                                      </span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+              </div>
+
+              {/* نموذج إضافة/تعديل شعبة */}
+              {showSectionForm && (
+                <div className="w-72 shrink-0">
+                  <div className="bg-white rounded-2xl shadow-sm p-5 sticky top-6 border border-gray-100">
+                    <h3 className="font-bold text-[var(--lux-black)] mb-4 text-sm">{editingSection ? "✏️ تعديل الشعبة" : "➕ إضافة شعبة جديدة"}</h3>
+                    <div className="flex flex-col gap-2.5">
+                      <div>
+                        <label className="block text-xs text-[var(--text-gray)] mb-1">اسم الشعبة *</label>
+                        <input value={sectionForm.name} onChange={(e) => setSectionForm(p => ({ ...p, name: e.target.value }))} placeholder="مثال: شعبة أ - ذكور" className={inp} />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-[var(--text-gray)] mb-1">السنة الدراسية *</label>
+                        <select value={sectionForm.academicYear} onChange={(e) => setSectionForm(p => ({ ...p, academicYear: e.target.value }))} className={inp}>
+                          {Object.entries(yearMap).map(([val, label]) => <option key={val} value={val}>{label}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-[var(--text-gray)] mb-1">الجنس *</label>
+                        <select value={sectionForm.gender} onChange={(e) => setSectionForm(p => ({ ...p, gender: e.target.value }))} className={inp}>
+                          <option value="male">👨 ذكور</option>
+                          <option value="female">👩 إناث</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-[var(--text-gray)] mb-1">المدرس المسؤول</label>
+                        <select value={sectionForm.teacherId} onChange={(e) => setSectionForm(p => ({ ...p, teacherId: e.target.value }))} className={inp}>
+                          <option value="">بدون مدرس</option>
+                          {teachers.map(t => (
+                            <option key={t.id} value={t.id}>{t.firstName} {t.lastName} — {yearMap[t.teacherYear || ""]}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-[var(--text-gray)] mb-1">الحد الأقصى للطلاب</label>
+                        <input type="number" value={sectionForm.maxStudents} onChange={(e) => setSectionForm(p => ({ ...p, maxStudents: e.target.value }))} min="1" max="100" className={inp} />
+                      </div>
+                      <div className="flex gap-2 mt-1">
+                        <button onClick={saveSection} disabled={savingSection} className="flex-1 bg-[var(--gold)] text-black py-2 rounded-xl font-bold hover:opacity-90 transition disabled:opacity-60 text-sm">
+                          {savingSection ? "..." : editingSection ? "حفظ" : "إنشاء"}
+                        </button>
+                        <button onClick={() => { setShowSectionForm(false); setEditingSection(null); }} className="border border-gray-200 text-[var(--text-gray)] px-4 py-2 rounded-xl text-sm hover:bg-gray-50 transition">إلغاء</button>
                       </div>
                     </div>
                   </div>
