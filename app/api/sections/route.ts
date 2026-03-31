@@ -27,12 +27,12 @@ export async function GET(req: NextRequest) {
 
   const result = await pool.query(`
     SELECT s.*, 
-      t.firstName as teacher_first, t.lastName as teacher_last,
+      t.first_name as teacher_first, t.last_name as teacher_last,
       COUNT(u.id) as student_count
     FROM sections s
     LEFT JOIN up_users t ON t.id = s.teacher_id
     LEFT JOIN up_users u ON u.section_id = s.id
-    GROUP BY s.id, t.firstName, t.lastName
+    GROUP BY s.id, t.first_name, t.last_name
     ORDER BY s.academic_year, s.gender, s.name
   `);
   return NextResponse.json({ data: result.rows });
