@@ -6,6 +6,83 @@ import { useRouter } from "next/navigation";
 const STRAPI_URL = process.env.NEXT_PUBLIC_STRAPI_URL || "http://localhost:1337";
 const ADMIN_EMAIL = "admin@hisni.com";
 
+// خريطة رموز الدول ورمز الاتصال الدولي
+const countryData: Record<string, { flag: string; code: string }> = {
+  "سوريا": { flag: "🇸🇾", code: "+963" },
+  "سوري": { flag: "🇸🇾", code: "+963" },
+  "السعودية": { flag: "🇸🇦", code: "+966" },
+  "سعودي": { flag: "🇸🇦", code: "+966" },
+  "الأردن": { flag: "🇯🇴", code: "+962" },
+  "أردني": { flag: "🇯🇴", code: "+962" },
+  "مصر": { flag: "🇪🇬", code: "+20" },
+  "مصري": { flag: "🇪🇬", code: "+20" },
+  "العراق": { flag: "🇮🇶", code: "+964" },
+  "عراقي": { flag: "🇮🇶", code: "+964" },
+  "لبنان": { flag: "🇱🇧", code: "+961" },
+  "لبناني": { flag: "🇱🇧", code: "+961" },
+  "الكويت": { flag: "🇰🇼", code: "+965" },
+  "كويتي": { flag: "🇰🇼", code: "+965" },
+  "الإمارات": { flag: "🇦🇪", code: "+971" },
+  "إماراتي": { flag: "🇦🇪", code: "+971" },
+  "قطر": { flag: "🇶🇦", code: "+974" },
+  "قطري": { flag: "🇶🇦", code: "+974" },
+  "البحرين": { flag: "🇧🇭", code: "+973" },
+  "بحريني": { flag: "🇧🇭", code: "+973" },
+  "عمان": { flag: "🇴🇲", code: "+968" },
+  "عُمان": { flag: "🇴🇲", code: "+968" },
+  "عماني": { flag: "🇴🇲", code: "+968" },
+  "اليمن": { flag: "🇾🇪", code: "+967" },
+  "يمني": { flag: "🇾🇪", code: "+967" },
+  "ليبيا": { flag: "🇱🇾", code: "+218" },
+  "ليبي": { flag: "🇱🇾", code: "+218" },
+  "تونس": { flag: "🇹🇳", code: "+216" },
+  "تونسي": { flag: "🇹🇳", code: "+216" },
+  "الجزائر": { flag: "🇩🇿", code: "+213" },
+  "جزائري": { flag: "🇩🇿", code: "+213" },
+  "المغرب": { flag: "🇲🇦", code: "+212" },
+  "مغربي": { flag: "🇲🇦", code: "+212" },
+  "السودان": { flag: "🇸🇩", code: "+249" },
+  "سوداني": { flag: "🇸🇩", code: "+249" },
+  "تركيا": { flag: "🇹🇷", code: "+90" },
+  "تركي": { flag: "🇹🇷", code: "+90" },
+  "ألمانيا": { flag: "🇩🇪", code: "+49" },
+  "المانيا": { flag: "🇩🇪", code: "+49" },
+  "هولندا": { flag: "🇳🇱", code: "+31" },
+  "السويد": { flag: "🇸🇪", code: "+46" },
+  "النرويج": { flag: "🇳🇴", code: "+47" },
+  "الدنمارك": { flag: "🇩🇰", code: "+45" },
+  "فرنسا": { flag: "🇫🇷", code: "+33" },
+  "بريطانيا": { flag: "🇬🇧", code: "+44" },
+  "المملكة المتحدة": { flag: "🇬🇧", code: "+44" },
+  "أمريكا": { flag: "🇺🇸", code: "+1" },
+  "الولايات المتحدة": { flag: "🇺🇸", code: "+1" },
+  "كندا": { flag: "🇨🇦", code: "+1" },
+  "أستراليا": { flag: "🇦🇺", code: "+61" },
+};
+
+// دالة تنسيق رقم الواتساب
+function formatWhatsApp(phone?: string, residenceCountry?: string, nationality?: string): string {
+  if (!phone) return "";
+  // نظف الرقم من المسافات والشرطات
+  let clean = phone.replace(/[\s\-\(\)]/g, "");
+  // إذا الرقم يبدأ بـ 00 حوّله لـ +
+  if (clean.startsWith("00")) clean = "+" + clean.slice(2);
+  // إذا الرقم ما عنده كود دولي، أضف كود البلد
+  if (!clean.startsWith("+")) {
+    const country = residenceCountry || nationality || "";
+    const found = Object.entries(countryData).find(([key]) => country.includes(key));
+    if (found) clean = found[1].code + clean.replace(/^0/, "");
+  }
+  return clean;
+}
+
+// دالة الحصول على علم البلد
+function getCountryFlag(residenceCountry?: string, nationality?: string): string {
+  const country = residenceCountry || nationality || "";
+  const found = Object.entries(countryData).find(([key]) => country.includes(key));
+  return found ? found[1].flag : "🌍";
+}
+
 interface Student {
   id: number; email: string; firstName?: string; lastName?: string; phone?: string;
   telegram?: string; nationality?: string; residenceCountry?: string; educationLevel?: string;
@@ -345,7 +422,16 @@ export default function AdminPage() {
     await fetchSessions();
   };
 
-  const filtered = students.filter(s => {
+  const [copied, setCopied] = useState<number | null>(null);
+
+  const copyWhatsApp = (student: Student) => {
+    const number = formatWhatsApp(student.phone, student.residenceCountry, student.nationality);
+    if (!number) return;
+    navigator.clipboard.writeText(number).then(() => {
+      setCopied(student.id);
+      setTimeout(() => setCopied(null), 2000);
+    });
+  };
     const mf = filter === "all" || s.registrationStatus === filter;
     const yf = yearFilter === "all" || s.academicYear === yearFilter;
     const gf = genderFilter === "all" || (genderFilter === "male" ? s.gender === "male" || s.gender === "ذكر" : s.gender === "female" || s.gender === "أنثى");
@@ -625,7 +711,14 @@ export default function AdminPage() {
                                     </div>
                                     <p className="text-xs text-[var(--text-gray)]">{student.email}</p>
                                     <div className="flex items-center gap-2 mt-0.5">
-                                      {student.phone && <p className="text-xs text-[var(--text-gray)]">{student.phone}</p>}
+                                      {student.phone && <p className="text-xs text-[var(--text-gray)]">{getCountryFlag(student.residenceCountry, student.nationality)} {student.phone}</p>}
+                                      {student.phone && (
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); copyWhatsApp(student); }}
+                                          className={`text-xs px-1.5 py-0.5 rounded transition ${copied === student.id ? "bg-green-500 text-white" : "bg-gray-100 text-gray-500 hover:bg-[var(--gold)]/10 hover:text-[var(--gold)]"}`}>
+                                          {copied === student.id ? "✓" : "📋"}
+                                        </button>
+                                      )}
                                       {student.academicYear && <span className="text-xs bg-[var(--gold)]/10 text-[var(--gold)] px-2 py-0.5 rounded-full">{yearMap[student.academicYear]}</span>}
                                       {student.nationality && <span className="text-xs text-[var(--text-gray)]">🌍 {student.nationality}</span>}
                                     </div>
@@ -656,10 +749,23 @@ export default function AdminPage() {
                       <div className="flex flex-col gap-1.5 mb-4 text-xs">
                         {selected.birthDate && <InfoRow label="العمر" value={`${calcAge(selected.birthDate)} سنة`} />}
                         {selected.gender && <InfoRow label="الجنس" value={genderMap[selected.gender] || selected.gender} />}
-                        {selected.phone && <InfoRow label="الهاتف" value={selected.phone} />}
+                        {selected.phone && (
+                          <div className="flex items-center justify-between py-1 border-b border-gray-50">
+                            <span className="text-[var(--text-gray)]">الهاتف</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-medium text-[var(--lux-black)]">{getCountryFlag(selected.residenceCountry, selected.nationality)} {selected.phone}</span>
+                              <button
+                                onClick={() => copyWhatsApp(selected)}
+                                className={`text-xs px-2 py-0.5 rounded-lg transition font-medium ${copied === selected.id ? "bg-green-500 text-white" : "bg-[var(--gold)]/10 text-[var(--gold)] hover:bg-[var(--gold)]/20"}`}
+                                title="نسخ للواتساب">
+                                {copied === selected.id ? "✓ نُسخ" : "📋 واتساب"}
+                              </button>
+                            </div>
+                          </div>
+                        )}
                         {selected.telegram && <InfoRow label="تليجرام" value={selected.telegram} />}
                         {selected.nationality && <InfoRow label="الجنسية" value={selected.nationality} />}
-                        {selected.residenceCountry && <InfoRow label="بلد الإقامة" value={selected.residenceCountry} />}
+                        {selected.residenceCountry && <InfoRow label="بلد الإقامة" value={`${getCountryFlag(selected.residenceCountry)} ${selected.residenceCountry}`} />}
                         {selected.educationLevel && <InfoRow label="المؤهل" value={educationMap[selected.educationLevel] || selected.educationLevel} />}
                       </div>
                       <div className="mb-3">
