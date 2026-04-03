@@ -16,13 +16,17 @@ interface ZoomSession {
 }
 interface SectionInfo {
   id: number; name: string; academic_year: string; gender: string;
-  teacher_first?: string; teacher_last?: string; teacher_email?: string; teacher_phone?: string;
+  teacher_first?: string; teacher_last?: string; teacher_email?: string;
   max_students: number; student_count: number;
+}
+interface Lesson {
+  id: number; title: string; video_url: string; academic_year: string;
+  subject: string; description?: string; duration?: string; order: number;
 }
 
 const statusConfig: Record<string, { label: string; color: string; bg: string; border: string; icon: string; message: string }> = {
   pending:  { label: "قيد المراجعة", color: "text-yellow-600", bg: "bg-yellow-50", border: "border-yellow-300", icon: "⏳", message: "طلبك قيد المراجعة، سيتم التواصل معك قريباً." },
-  approved: { label: "مقبول", color: "text-green-600", bg: "bg-green-50", border: "border-green-300", icon: "✅", message: "مبارك! تم قبولك في المعهد. يمكنك الآن الوصول إلى جميع الجلسات." },
+  approved: { label: "مقبول", color: "text-green-600", bg: "bg-green-50", border: "border-green-300", icon: "✅", message: "مبارك! تم قبولك في المعهد." },
   rejected: { label: "مرفوض", color: "text-red-600", bg: "bg-red-50", border: "border-red-300", icon: "❌", message: "لم يتم قبول طلبك. للاستفسار تواصل مع إدارة المعهد." },
 };
 const yearMap: Record<string, string> = {
@@ -42,41 +46,49 @@ const subjectsByYear: Record<string, string[]> = {
   year5: ["الفقه", "أصول الفقه", "التخريج المتقدم", "المقاصد المتقدمة"],
 };
 
-type Tab = "overview" | "subjects" | "sessions" | "profile";
+type Tab = "overview" | "subjects" | "sessions" | "lessons" | "profile";
 const sidebarItems: { id: Tab; label: string; icon: string }[] = [
   { id: "overview",  label: "نظرة عامة",       icon: "🏠" },
   { id: "subjects",  label: "موادي الدراسية",   icon: "📚" },
   { id: "sessions",  label: "الجلسات المباشرة", icon: "🎥" },
+  { id: "lessons",   label: "الدروس المسجلة",   icon: "🎬" },
   { id: "profile",   label: "ملفي الشخصي",      icon: "👤" },
 ];
+
+function getYouTubeId(url: string): string | null {
+  const patterns = [/youtube\.com\/watch\?v=([^&]+)/, /youtu\.be\/([^?]+)/, /youtube\.com\/embed\/([^?]+)/];
+  for (const p of patterns) { const m = url.match(p); if (m) return m[1]; }
+  return null;
+}
 
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [sessions, setSessions] = useState<ZoomSession[]>([]);
   const [section, setSection] = useState<SectionInfo | null>(null);
+  const [lessons, setLessons] = useState<Lesson[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [lessonFilter, setLessonFilter] = useState("all");
+  const [playingLesson, setPlayingLesson] = useState<Lesson | null>(null);
 
   useEffect(() => {
     const jwt = localStorage.getItem("jwt");
     if (!jwt) { router.push("/login"); return; }
-
     Promise.all([
       fetch(`${STRAPI_URL}/api/users/me`, { headers: { Authorization: `Bearer ${jwt}` } }).then(r => r.json()),
       fetch(`${STRAPI_URL}/api/zoom-sessions?filters[isActive][$eq]=true&sort=date:asc`, { headers: { Authorization: `Bearer ${jwt}` } }).then(r => r.ok ? r.json() : { data: [] }),
       fetch("/api/sections/my", { headers: { Authorization: `Bearer ${jwt}` } }).then(r => r.ok ? r.json() : null).catch(() => null),
-    ])
-      .then(([userData, sessionsData, sectionData]) => {
-        if (userData?.error) { clearSession(); router.push("/login"); return; }
-        setUser(userData);
-        setSessions(Array.isArray(sessionsData?.data)
-          ? sessionsData.data.map((s: ZoomSession) => ({ id: s.id, title: s.title, date: s.date, zoomLink: s.zoomLink, academicYear: s.academicYear, isActive: s.isActive }))
-          : []);
-        if (sectionData?.data) setSection(sectionData.data);
-      })
-      .finally(() => setLoading(false));
+    ]).then(([userData, sessionsData, sectionData]) => {
+      if (userData?.error) { clearSession(); router.push("/login"); return; }
+      setUser(userData);
+      setSessions(Array.isArray(sessionsData?.data) ? sessionsData.data.map((s: ZoomSession) => ({ id: s.id, title: s.title, date: s.date, zoomLink: s.zoomLink, academicYear: s.academicYear, isActive: s.isActive })) : []);
+      if (sectionData?.data) setSection(sectionData.data);
+      if (userData?.academicYear) {
+        fetch(`/api/lessons?year=${userData.academicYear}`).then(r => r.json()).then(d => { if (Array.isArray(d?.data)) setLessons(d.data); }).catch(() => {});
+      }
+    }).finally(() => setLoading(false));
   }, [router]);
 
   const handleLogout = () => { clearSession(); router.push("/login"); };
@@ -99,6 +111,10 @@ export default function DashboardPage() {
   const upcomingSessions = mySessions.filter(s => new Date(s.date) >= new Date());
   const nextSession = upcomingSessions[0];
   const teacherName = section ? `${section.teacher_first || ""} ${section.teacher_last || ""}`.trim() : null;
+  const lessonSubjects = ["all", ...Array.from(new Set(lessons.map(l => l.subject)))];
+  const filteredLessons = lessonFilter === "all" ? lessons : lessons.filter(l => l.subject === lessonFilter);
+  const lessonsBySubject: Record<string, Lesson[]> = {};
+  filteredLessons.forEach(l => { if (!lessonsBySubject[l.subject]) lessonsBySubject[l.subject] = []; lessonsBySubject[l.subject].push(l); });
 
   return (
     <div className="min-h-screen bg-[var(--soft-white)] flex flex-col" dir="rtl">
@@ -120,7 +136,6 @@ export default function DashboardPage() {
 
       <div className="flex flex-1">
         {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-30 lg:hidden" onClick={() => setSidebarOpen(false)} />}
-
         <aside className={`fixed lg:sticky top-16 h-[calc(100vh-4rem)] w-64 bg-[var(--lux-black)] border-l border-[var(--gold)]/10 flex flex-col z-30 transition-transform duration-300 ${sidebarOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"}`}>
           <div className="p-5 border-b border-[var(--gold)]/10">
             <div className="flex items-center gap-3">
@@ -133,11 +148,8 @@ export default function DashboardPage() {
                 {section && <p className="text-white/50 text-xs truncate">🏫 {section.name}</p>}
               </div>
             </div>
-            <div className={`mt-3 px-3 py-1.5 rounded-lg text-xs font-medium text-center border ${status.bg} ${status.color} ${status.border}`}>
-              {status.icon} {status.label}
-            </div>
+            <div className={`mt-3 px-3 py-1.5 rounded-lg text-xs font-medium text-center border ${status.bg} ${status.color} ${status.border}`}>{status.icon} {status.label}</div>
           </div>
-
           <nav className="flex-1 p-3 overflow-y-auto">
             <p className="text-[var(--gold)]/40 text-xs font-medium px-3 mb-2">القائمة الرئيسية</p>
             {sidebarItems.map((item) => (
@@ -145,17 +157,13 @@ export default function DashboardPage() {
                 className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition mb-1 text-right ${activeTab === item.id ? "bg-[var(--gold)] text-black" : "text-white/70 hover:bg-white/5 hover:text-white"}`}>
                 <span>{item.icon}</span>
                 {item.label}
-                {item.id === "sessions" && upcomingSessions.length > 0 && (
-                  <span className={`mr-auto text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === item.id ? "bg-black/20 text-black" : "bg-[var(--gold)] text-black"}`}>{upcomingSessions.length}</span>
-                )}
+                {item.id === "sessions" && upcomingSessions.length > 0 && <span className={`mr-auto text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === item.id ? "bg-black/20 text-black" : "bg-[var(--gold)] text-black"}`}>{upcomingSessions.length}</span>}
+                {item.id === "lessons" && lessons.length > 0 && <span className={`mr-auto text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === item.id ? "bg-black/20 text-black" : "bg-[var(--gold)] text-black"}`}>{lessons.length}</span>}
               </button>
             ))}
           </nav>
-
           <div className="p-3 border-t border-[var(--gold)]/10">
-            <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-red-400 hover:bg-red-500/10 transition text-right">
-              <span>🚪</span> تسجيل الخروج
-            </button>
+            <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-red-400 hover:bg-red-500/10 transition text-right"><span>🚪</span> تسجيل الخروج</button>
           </div>
         </aside>
 
@@ -163,13 +171,9 @@ export default function DashboardPage() {
           {user.registrationStatus !== "approved" && (
             <div className={`rounded-2xl p-4 mb-6 border-2 ${status.bg} ${status.border} flex items-start gap-3`}>
               <span className="text-2xl">{status.icon}</span>
-              <div>
-                <p className={`font-bold ${status.color}`}>{status.label}</p>
-                <p className={`text-sm mt-1 ${status.color} opacity-80`}>{status.message}</p>
-              </div>
+              <div><p className={`font-bold ${status.color}`}>{status.label}</p><p className={`text-sm mt-1 ${status.color} opacity-80`}>{status.message}</p></div>
             </div>
           )}
-
           <div className="mb-6">
             <h1 className="text-xl font-bold text-[var(--lux-black)]">{sidebarItems.find(i => i.id === activeTab)?.icon} {sidebarItems.find(i => i.id === activeTab)?.label}</h1>
             <p className="text-[var(--text-gray)] text-sm">معهد الإمام تقي الدين الحصني</p>
@@ -200,13 +204,12 @@ export default function DashboardPage() {
                   </div>
                 )}
               </div>
-
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[
                   { label: "السنة الدراسية", value: yearLabel, icon: "📖", color: "text-[var(--gold)]" },
                   { label: "الشعبة", value: section?.name || "غير محددة", icon: "🏫", color: "text-purple-600" },
                   { label: "جلسات قادمة", value: upcomingSessions.length.toString(), icon: "🎥", color: "text-blue-600" },
-                  { label: "الحالة", value: status.label, icon: status.icon, color: status.color },
+                  { label: "دروس مسجلة", value: lessons.length.toString(), icon: "🎬", color: "text-green-600" },
                 ].map((stat) => (
                   <div key={stat.label} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 text-center">
                     <p className="text-2xl mb-2">{stat.icon}</p>
@@ -215,19 +218,15 @@ export default function DashboardPage() {
                   </div>
                 ))}
               </div>
-
-              {/* بطاقة الشعبة والمدرس */}
               {section && (
                 <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
                   <h3 className="font-bold text-[var(--lux-black)] mb-4">🏫 شعبتي</h3>
                   <div className="flex items-center gap-4 p-4 bg-[var(--soft-white)] rounded-xl">
-                    <div className="w-12 h-12 rounded-full bg-[var(--gold)] flex items-center justify-center shrink-0">
-                      <span className="text-black text-xl">🏫</span>
-                    </div>
+                    <div className="w-12 h-12 rounded-full bg-[var(--gold)] flex items-center justify-center shrink-0"><span className="text-black text-xl">🏫</span></div>
                     <div className="flex-1">
                       <p className="font-bold text-[var(--lux-black)]">{section.name}</p>
                       <p className="text-xs text-[var(--text-gray)] mt-0.5">{yearMap[section.academic_year]} • {section.gender === "female" ? "إناث 👩" : "ذكور 👨"}</p>
-                      <p className="text-xs text-[var(--text-gray)] mt-0.5">👥 {section.student_count} طالب من {section.max_students}</p>
+                      <p className="text-xs text-[var(--text-gray)] mt-0.5">👥 {section.student_count}/{section.max_students}</p>
                     </div>
                   </div>
                   {teacherName && (
@@ -244,7 +243,6 @@ export default function DashboardPage() {
                   )}
                 </div>
               )}
-
               <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
                 <h3 className="font-bold text-[var(--lux-black)] mb-4">معلومات سريعة</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -265,13 +263,16 @@ export default function DashboardPage() {
                 <span className="text-xs bg-[var(--gold)]/10 text-[var(--gold)] px-3 py-1 rounded-full font-medium">{subjects.length} مادة</span>
               </div>
               {subjects.length === 0 ? (
-                <div className="text-center py-10"><p className="text-4xl mb-3">📚</p><p className="text-[var(--text-gray)]">لم يتم تحديد سنتك الدراسية بعد</p></div>
+                <div className="text-center py-10"><p className="text-4xl mb-3">📚</p><p className="text-[var(--text-gray)]">لم يتم تحديد سنتك بعد</p></div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {subjects.map((subject, index) => (
                     <div key={index} className="flex items-center gap-3 p-4 bg-[var(--soft-white)] rounded-xl border border-gray-100 hover:border-[var(--gold)]/30 transition">
                       <div className="w-8 h-8 rounded-full bg-[var(--gold)] flex items-center justify-center text-black font-bold text-sm shrink-0">{index + 1}</div>
                       <span className="font-medium text-[var(--lux-black)]">{subject}</span>
+                      {lessons.filter(l => l.subject === subject).length > 0 && (
+                        <span className="mr-auto text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">{lessons.filter(l => l.subject === subject).length} 🎬</span>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -284,12 +285,12 @@ export default function DashboardPage() {
             <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
               <div className="flex items-center justify-between mb-5">
                 <h3 className="font-bold text-[var(--lux-black)]">الجلسات المباشرة</h3>
-                {upcomingSessions.length > 0 && <span className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full font-medium">{upcomingSessions.length} جلسة قادمة</span>}
+                {upcomingSessions.length > 0 && <span className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full font-medium">{upcomingSessions.length} قادمة</span>}
               </div>
               {user.registrationStatus !== "approved" ? (
-                <div className="text-center py-10"><p className="text-4xl mb-3">🔒</p><p className="font-medium text-[var(--lux-black)]">الجلسات متاحة للطلاب المقبولين فقط</p></div>
+                <div className="text-center py-10"><p className="text-4xl mb-3">🔒</p><p className="font-medium text-[var(--lux-black)]">متاحة للطلاب المقبولين فقط</p></div>
               ) : mySessions.length === 0 ? (
-                <div className="text-center py-10"><p className="text-4xl mb-3">📅</p><p className="text-[var(--text-gray)]">لا توجد جلسات مجدولة حالياً</p></div>
+                <div className="text-center py-10"><p className="text-4xl mb-3">📅</p><p className="text-[var(--text-gray)]">لا توجد جلسات حالياً</p></div>
               ) : (
                 <div className="flex flex-col gap-3">
                   {mySessions.map((session) => {
@@ -316,35 +317,119 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {/* الدروس المسجلة */}
+          {activeTab === "lessons" && (
+            <div className="space-y-5">
+              {user.registrationStatus !== "approved" ? (
+                <div className="text-center py-16 bg-white rounded-2xl">
+                  <p className="text-4xl mb-3">🔒</p>
+                  <p className="font-medium text-[var(--lux-black)]">الدروس متاحة للطلاب المقبولين فقط</p>
+                </div>
+              ) : lessons.length === 0 ? (
+                <div className="text-center py-16 bg-white rounded-2xl">
+                  <p className="text-4xl mb-3">🎬</p>
+                  <p className="font-semibold text-[var(--lux-black)]">لا توجد دروس مسجلة بعد</p>
+                  <p className="text-sm text-[var(--text-gray)] mt-1">ستظهر الدروس هنا عند إضافتها من الإدارة</p>
+                </div>
+              ) : (
+                <>
+                  <div className="flex gap-2 flex-wrap">
+                    {lessonSubjects.map(s => (
+                      <button key={s} onClick={() => setLessonFilter(s)}
+                        className={`text-xs px-3 py-1.5 rounded-full font-medium transition ${lessonFilter === s ? "bg-[var(--gold)] text-black" : "bg-white border border-gray-200 text-[var(--text-gray)]"}`}>
+                        {s === "all" ? `📚 الكل (${lessons.length})` : `${s} (${lessons.filter(l => l.subject === s).length})`}
+                      </button>
+                    ))}
+                  </div>
+
+                  {playingLesson && (
+                    <div className="bg-[var(--lux-black)] rounded-2xl overflow-hidden shadow-xl">
+                      <div className="p-4 flex items-center justify-between">
+                        <div>
+                          <p className="text-white font-bold">{playingLesson.title}</p>
+                          <p className="text-[var(--gold)] text-xs mt-0.5">{playingLesson.subject}{playingLesson.duration ? ` • ⏱ ${playingLesson.duration}` : ""}</p>
+                        </div>
+                        <button onClick={() => setPlayingLesson(null)} className="text-white/60 hover:text-white transition text-xl">✕</button>
+                      </div>
+                      {getYouTubeId(playingLesson.video_url) ? (
+                        <div className="relative" style={{ paddingBottom: "56.25%" }}>
+                          <iframe src={`https://www.youtube.com/embed/${getYouTubeId(playingLesson.video_url)}?autoplay=1`} className="absolute inset-0 w-full h-full" allowFullScreen allow="autoplay; encrypted-media" />
+                        </div>
+                      ) : (
+                        <div className="p-4">
+                          <a href={playingLesson.video_url} target="_blank" rel="noopener noreferrer" className="block w-full bg-[var(--gold)] text-black py-3 rounded-xl font-bold text-center hover:opacity-90 transition">فتح الرابط 🔗</a>
+                        </div>
+                      )}
+                      {playingLesson.description && <div className="p-4 border-t border-white/10"><p className="text-white/70 text-sm">{playingLesson.description}</p></div>}
+                    </div>
+                  )}
+
+                  {Object.entries(lessonsBySubject).map(([subject, subjectLessons]) => (
+                    <div key={subject} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                      <div className="px-5 py-3 bg-[var(--lux-black)] flex items-center justify-between">
+                        <h3 className="font-bold text-white text-sm">{subject}</h3>
+                        <span className="text-xs text-[var(--gold)]">{subjectLessons.length} درس</span>
+                      </div>
+                      <div className="divide-y divide-gray-50">
+                        {subjectLessons.map((lesson, idx) => {
+                          const ytId = getYouTubeId(lesson.video_url);
+                          const isPlaying = playingLesson?.id === lesson.id;
+                          return (
+                            <div key={lesson.id} onClick={() => setPlayingLesson(isPlaying ? null : lesson)}
+                              className={`flex items-center gap-4 p-4 cursor-pointer hover:bg-[var(--soft-white)] transition ${isPlaying ? "bg-[var(--gold)]/5" : ""}`}>
+                              <div className="w-20 h-14 rounded-lg overflow-hidden bg-gray-900 flex items-center justify-center shrink-0 relative">
+                                {ytId ? <img src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`} alt={lesson.title} className="w-full h-full object-cover" /> : <span className="text-2xl">🎬</span>}
+                                <div className={`absolute inset-0 flex items-center justify-center ${isPlaying ? "bg-[var(--gold)]/30" : "bg-black/30"}`}>
+                                  <span className="text-white text-xl">{isPlaying ? "⏸" : "▶"}</span>
+                                </div>
+                              </div>
+                              <div className="flex-1 overflow-hidden">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-[var(--text-gray)] shrink-0">{idx + 1}.</span>
+                                  <p className="font-semibold text-[var(--lux-black)] text-sm truncate">{lesson.title}</p>
+                                </div>
+                                {lesson.description && <p className="text-xs text-[var(--text-gray)] mt-0.5 truncate">{lesson.description}</p>}
+                                {lesson.duration && <p className="text-xs text-[var(--gold)] mt-0.5">⏱ {lesson.duration}</p>}
+                              </div>
+                              {isPlaying && <span className="text-[var(--gold)] text-xs font-bold shrink-0">▶ يُشغَّل</span>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
+
           {/* الملف الشخصي */}
           {activeTab === "profile" && (
-            <div className="space-y-5">
-              <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
-                <div className="flex items-center gap-4 mb-6 pb-5 border-b border-gray-100">
-                  <div className="w-16 h-16 rounded-full bg-[var(--lux-black)] border-2 border-[var(--gold)] flex items-center justify-center shrink-0">
-                    <span className="text-[var(--gold)] text-2xl font-bold">{fullName.charAt(0)}</span>
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-[var(--lux-black)] text-lg">{fullName}</h3>
-                    <p className="text-[var(--gold)] text-sm">{yearLabel}</p>
-                    {section && <p className="text-[var(--text-gray)] text-xs mt-0.5">🏫 {section.name}</p>}
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium mt-1 inline-block border ${status.bg} ${status.color} ${status.border}`}>{status.icon} {status.label}</span>
-                  </div>
+            <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
+              <div className="flex items-center gap-4 mb-6 pb-5 border-b border-gray-100">
+                <div className="w-16 h-16 rounded-full bg-[var(--lux-black)] border-2 border-[var(--gold)] flex items-center justify-center shrink-0">
+                  <span className="text-[var(--gold)] text-2xl font-bold">{fullName.charAt(0)}</span>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <InfoRow label="الاسم الكامل" value={fullName} icon="👤" />
-                  <InfoRow label="البريد الإلكتروني" value={user.email} icon="📧" />
-                  <InfoRow label="رقم الهاتف" value={user.phone} icon="📞" />
-                  <InfoRow label="التليجرام" value={user.telegram} icon="✈️" />
-                  <InfoRow label="الجنس" value={genderMap[user.gender || ""] || "-"} icon="👥" />
-                  <InfoRow label="تاريخ الميلاد" value={user.birthDate || "-"} icon="🎂" />
-                  <InfoRow label="الجنسية" value={user.nationality} icon="🌍" />
-                  <InfoRow label="بلد الإقامة" value={user.residenceCountry} icon="🏠" />
-                  <InfoRow label="المستوى التعليمي" value={educationMap[user.educationLevel || ""] || "-"} icon="🎓" />
-                  <InfoRow label="السنة الدراسية" value={yearLabel} icon="📖" />
-                  {section && <InfoRow label="الشعبة" value={section.name} icon="🏫" />}
-                  {teacherName && <InfoRow label="مدرس الشعبة" value={teacherName} icon="👨‍🏫" />}
+                <div>
+                  <h3 className="font-bold text-[var(--lux-black)] text-lg">{fullName}</h3>
+                  <p className="text-[var(--gold)] text-sm">{yearLabel}</p>
+                  {section && <p className="text-[var(--text-gray)] text-xs mt-0.5">🏫 {section.name}</p>}
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium mt-1 inline-block border ${status.bg} ${status.color} ${status.border}`}>{status.icon} {status.label}</span>
                 </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <InfoRow label="الاسم الكامل" value={fullName} icon="👤" />
+                <InfoRow label="البريد الإلكتروني" value={user.email} icon="📧" />
+                <InfoRow label="رقم الهاتف" value={user.phone} icon="📞" />
+                <InfoRow label="التليجرام" value={user.telegram} icon="✈️" />
+                <InfoRow label="الجنس" value={genderMap[user.gender || ""] || "-"} icon="👥" />
+                <InfoRow label="تاريخ الميلاد" value={user.birthDate || "-"} icon="🎂" />
+                <InfoRow label="الجنسية" value={user.nationality} icon="🌍" />
+                <InfoRow label="بلد الإقامة" value={user.residenceCountry} icon="🏠" />
+                <InfoRow label="المستوى التعليمي" value={educationMap[user.educationLevel || ""] || "-"} icon="🎓" />
+                <InfoRow label="السنة الدراسية" value={yearLabel} icon="📖" />
+                {section && <InfoRow label="الشعبة" value={section.name} icon="🏫" />}
+                {teacherName && <InfoRow label="مدرس الشعبة" value={teacherName} icon="👨‍🏫" />}
               </div>
             </div>
           )}
