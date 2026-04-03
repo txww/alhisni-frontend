@@ -23,6 +23,10 @@ interface Section {
   teacher_id?: number; teacher_first?: string; teacher_last?: string;
   max_students: number; student_count: number;
 }
+interface Lesson {
+  id: number; title: string; video_url: string; academic_year: string;
+  subject: string; description?: string; duration?: string; order: number;
+}
 
 const statusMap: Record<string, { label: string; color: string; bg: string; border: string }> = {
   pending:  { label: "قيد المراجعة", color: "text-yellow-700", bg: "bg-yellow-50",  border: "border-yellow-200" },
@@ -69,18 +73,18 @@ const exportCSV = (students: Student[]) => {
   URL.revokeObjectURL(url);
 };
 
-type Tab = "overview" | "students" | "teachers" | "sessions" | "sections";
+type Tab = "overview" | "students" | "teachers" | "sessions" | "sections" | "lessons";
 const sidebarItems: { id: Tab; label: string; icon: string }[] = [
-  { id: "overview",  label: "نظرة عامة",   icon: "📊" },
-  { id: "students",  label: "الطلاب",       icon: "👥" },
-  { id: "teachers",  label: "المدرسون",     icon: "👨‍🏫" },
-  { id: "sections",  label: "الشعب",        icon: "🏫" },
-  { id: "sessions",  label: "جلسات Zoom",   icon: "🎥" },
+  { id: "overview",  label: "نظرة عامة",      icon: "📊" },
+  { id: "students",  label: "الطلاب",          icon: "👥" },
+  { id: "teachers",  label: "المدرسون",        icon: "👨‍🏫" },
+  { id: "sections",  label: "الشعب",           icon: "🏫" },
+  { id: "lessons",   label: "الدروس المسجلة", icon: "🎬" },
+  { id: "sessions",  label: "جلسات Zoom",      icon: "🎥" },
 ];
 
 const inp = "w-full border border-gray-200 rounded-lg px-3 py-2 text-right text-black bg-white focus:outline-none focus:border-[var(--gold)] transition text-sm";
 
-// مكون شريط بياني بسيط
 function Bar({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
   const pct = max > 0 ? Math.round((value / max) * 100) : 0;
   return (
@@ -105,6 +109,7 @@ export default function AdminPage() {
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [filter, setFilter] = useState("all");
   const [yearFilter, setYearFilter] = useState("all");
+  const [genderFilter, setGenderFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Student | null>(null);
   const [updating, setUpdating] = useState(false);
@@ -121,7 +126,6 @@ export default function AdminPage() {
   const [sessionMsg, setSessionMsg] = useState("");
   const [editingSession, setEditingSession] = useState<ZoomSession | null>(null);
 
-  // الشعب
   const [sections, setSections] = useState<Section[]>([]);
   const [loadingSections, setLoadingSections] = useState(false);
   const [sectionMsg, setSectionMsg] = useState("");
@@ -139,6 +143,15 @@ export default function AdminPage() {
   const [teacherForm, setTeacherForm] = useState({ firstName: "", lastName: "", email: "", password: "", phone: "", teacherYear: "year1", teacherSubject: "" });
   const [savingTeacher, setSavingTeacher] = useState(false);
 
+  // الدروس المسجلة
+  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [loadingLessons, setLoadingLessons] = useState(false);
+  const [lessonMsg, setLessonMsg] = useState("");
+  const [showLessonForm, setShowLessonForm] = useState(false);
+  const [savingLesson, setSavingLesson] = useState(false);
+  const [lessonYearFilter, setLessonYearFilter] = useState("all");
+  const [lessonForm, setLessonForm] = useState({ title: "", videoUrl: "", academicYear: "year1", subject: "", description: "", duration: "", order: "0" });
+
   useEffect(() => {
     const jwt = localStorage.getItem("jwt");
     if (!jwt) { setChecking(false); router.push("/login"); return; }
@@ -149,7 +162,7 @@ export default function AdminPage() {
       .finally(() => setChecking(false));
   }, [router]);
 
-  useEffect(() => { if (authed) { fetchStudents(); fetchSessions(); fetchTeachers(); fetchSections(); } }, [authed]);
+  useEffect(() => { if (authed) { fetchStudents(); fetchSessions(); fetchTeachers(); fetchSections(); fetchLessons(); } }, [authed]);
 
   const getJwt = () => localStorage.getItem("jwt") || "";
 
@@ -182,6 +195,37 @@ export default function AdminPage() {
       setSections(Array.isArray(data?.data) ? data.data : []);
     } catch { setSections([]); }
     setLoadingSections(false);
+  };
+  const fetchLessons = async () => {
+    setLoadingLessons(true);
+    try {
+      const res = await fetch("/api/lessons", { headers: { Authorization: `Bearer ${getJwt()}` } });
+      const data = await res.json();
+      setLessons(Array.isArray(data?.data) ? data.data : []);
+    } catch { setLessons([]); }
+    setLoadingLessons(false);
+  };
+
+  const saveLesson = async () => {
+    if (!lessonForm.title || !lessonForm.videoUrl || !lessonForm.subject) { setLessonMsg("يرجى ملء العنوان والرابط والمادة"); return; }
+    setSavingLesson(true);
+    const res = await fetch("/api/lessons", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${getJwt()}` },
+      body: JSON.stringify({ title: lessonForm.title, videoUrl: lessonForm.videoUrl, academicYear: lessonForm.academicYear, subject: lessonForm.subject, description: lessonForm.description, duration: lessonForm.duration, order: parseInt(lessonForm.order) || 0 }),
+    });
+    if (!res.ok) { setLessonMsg("حدث خطأ"); setSavingLesson(false); return; }
+    setLessonMsg("تمت إضافة الدرس ✓");
+    setLessonForm({ title: "", videoUrl: "", academicYear: "year1", subject: "", description: "", duration: "", order: "0" });
+    setShowLessonForm(false);
+    await fetchLessons(); setSavingLesson(false);
+    setTimeout(() => setLessonMsg(""), 3000);
+  };
+
+  const deleteLesson = async (id: number) => {
+    if (!confirm("حذف هذا الدرس؟")) return;
+    await fetch(`/api/lessons?id=${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${getJwt()}` } });
+    await fetchLessons();
   };
 
   const saveSection = async () => {
@@ -304,14 +348,17 @@ export default function AdminPage() {
   const filtered = students.filter(s => {
     const mf = filter === "all" || s.registrationStatus === filter;
     const yf = yearFilter === "all" || s.academicYear === yearFilter;
-    return mf && yf && `${s.firstName || ""} ${s.lastName || ""} ${s.email}`.toLowerCase().includes(search.toLowerCase());
+    const gf = genderFilter === "all" || (genderFilter === "male" ? s.gender === "male" || s.gender === "ذكر" : s.gender === "female" || s.gender === "أنثى");
+    return mf && yf && gf && `${s.firstName || ""} ${s.lastName || ""} ${s.email}`.toLowerCase().includes(search.toLowerCase());
   });
 
-  // إحصائيات للتقارير
   const approvedCount = students.filter(s => s.registrationStatus === "approved").length;
   const pendingCount = students.filter(s => s.registrationStatus === "pending").length;
   const rejectedCount = students.filter(s => s.registrationStatus === "rejected").length;
   const upcomingSessions = sessions.filter(s => new Date(s.date) >= new Date()).length;
+  const maleStudents = students.filter(s => s.gender === "male" || s.gender === "ذكر");
+  const femaleStudents = students.filter(s => s.gender === "female" || s.gender === "أنثى");
+  const filteredLessons = lessonYearFilter === "all" ? lessons : lessons.filter(l => l.academic_year === lessonYearFilter);
 
   if (checking) return <main className="min-h-screen bg-[var(--lux-black)] flex items-center justify-center"><div className="text-[var(--gold)]">جاري التحقق...</div></main>;
   if (!authed) return null;
@@ -320,8 +367,6 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-[var(--soft-white)] flex flex-col" dir="rtl">
-
-      {/* Header */}
       <header className="bg-[var(--lux-black)] border-b border-[var(--gold)]/20 h-16 flex items-center justify-between px-4 md:px-6 sticky top-0 z-40">
         <div className="flex items-center gap-3">
           <button onClick={() => setSidebarOpen(v => !v)} className="lg:hidden text-white p-2 rounded-lg hover:bg-white/10 transition">
@@ -340,8 +385,6 @@ export default function AdminPage() {
 
       <div className="flex flex-1">
         {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-30 lg:hidden" onClick={() => setSidebarOpen(false)} />}
-
-        {/* Sidebar */}
         <aside className={`fixed lg:sticky top-16 h-[calc(100vh-4rem)] w-64 bg-[var(--lux-black)] border-l border-[var(--gold)]/10 flex flex-col z-30 transition-transform duration-300 ${sidebarOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"}`}>
           <div className="p-5 border-b border-[var(--gold)]/10">
             <div className="grid grid-cols-2 gap-2">
@@ -354,16 +397,15 @@ export default function AdminPage() {
                 <p className="text-white/50 text-xs mt-0.5">بانتظار</p>
               </div>
               <div className="bg-white/5 rounded-xl p-3 text-center">
-                <p className="text-green-400 font-bold text-xl">{approvedCount}</p>
-                <p className="text-white/50 text-xs mt-0.5">مقبول</p>
+                <p className="text-blue-400 font-bold text-xl">{maleStudents.length}</p>
+                <p className="text-white/50 text-xs mt-0.5">👨 ذكور</p>
               </div>
               <div className="bg-white/5 rounded-xl p-3 text-center">
-                <p className="text-purple-400 font-bold text-xl">{teachers.length}</p>
-                <p className="text-white/50 text-xs mt-0.5">مدرس</p>
+                <p className="text-pink-400 font-bold text-xl">{femaleStudents.length}</p>
+                <p className="text-white/50 text-xs mt-0.5">👩 إناث</p>
               </div>
             </div>
           </div>
-
           <nav className="flex-1 p-3 overflow-y-auto">
             <p className="text-[var(--gold)]/40 text-xs font-medium px-3 mb-2">القائمة الرئيسية</p>
             {sidebarItems.map((item) => (
@@ -374,10 +416,12 @@ export default function AdminPage() {
                 {item.id === "students" && pendingCount > 0 && (
                   <span className={`mr-auto text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === item.id ? "bg-black/20 text-black" : "bg-yellow-400 text-black"}`}>{pendingCount}</span>
                 )}
+                {item.id === "lessons" && lessons.length > 0 && (
+                  <span className={`mr-auto text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === item.id ? "bg-black/20 text-black" : "bg-[var(--gold)] text-black"}`}>{lessons.length}</span>
+                )}
               </button>
             ))}
           </nav>
-
           <div className="p-3 border-t border-[var(--gold)]/10">
             <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-red-400 hover:bg-red-500/10 transition text-right">
               <span>🚪</span> تسجيل الخروج
@@ -385,17 +429,15 @@ export default function AdminPage() {
           </div>
         </aside>
 
-        {/* Main */}
         <main className="flex-1 p-4 md:p-6 overflow-auto min-w-0">
           <div className="mb-6">
             <h1 className="text-xl font-bold text-[var(--lux-black)]">{pageTitle?.icon} {pageTitle?.label}</h1>
             <p className="text-[var(--text-gray)] text-sm">معهد الإمام تقي الدين الحصني</p>
           </div>
 
-          {/* ===== نظرة عامة ===== */}
+          {/* نظرة عامة */}
           {activeTab === "overview" && (
             <div className="space-y-5">
-              {/* Stats Cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[
                   { label: "إجمالي الطلاب", value: students.length, icon: "👥", color: "text-[var(--gold)]", bg: "bg-[var(--gold)]/10" },
@@ -411,8 +453,31 @@ export default function AdminPage() {
                 ))}
               </div>
 
+              {/* ذكور وإناث */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-white rounded-2xl p-5 shadow-sm border border-blue-100 cursor-pointer hover:border-blue-300 transition" onClick={() => { setActiveTab("students"); setGenderFilter("male"); }}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-3xl font-bold text-blue-600">{maleStudents.length}</p>
+                      <p className="text-[var(--text-gray)] text-sm mt-1">👨 الطلاب الذكور</p>
+                      <p className="text-xs text-blue-400 mt-1">مقبول: {maleStudents.filter(s => s.registrationStatus === "approved").length}</p>
+                    </div>
+                    <span className="text-5xl opacity-20">👨</span>
+                  </div>
+                </div>
+                <div className="bg-white rounded-2xl p-5 shadow-sm border border-pink-100 cursor-pointer hover:border-pink-300 transition" onClick={() => { setActiveTab("students"); setGenderFilter("female"); }}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-3xl font-bold text-pink-600">{femaleStudents.length}</p>
+                      <p className="text-[var(--text-gray)] text-sm mt-1">👩 الطالبات الإناث</p>
+                      <p className="text-xs text-pink-400 mt-1">مقبول: {femaleStudents.filter(s => s.registrationStatus === "approved").length}</p>
+                    </div>
+                    <span className="text-5xl opacity-20">👩</span>
+                  </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {/* توزيع الحالات */}
                 <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
                   <h3 className="font-bold text-[var(--lux-black)] mb-4">📊 توزيع حالات الطلاب</h3>
                   <div className="space-y-3">
@@ -425,8 +490,6 @@ export default function AdminPage() {
                     <span>الإجمالي: <strong>{students.length}</strong></span>
                   </div>
                 </div>
-
-                {/* توزيع السنوات */}
                 <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
                   <h3 className="font-bold text-[var(--lux-black)] mb-4">📚 توزيع السنوات الدراسية</h3>
                   <div className="space-y-3">
@@ -436,8 +499,6 @@ export default function AdminPage() {
                     })}
                   </div>
                 </div>
-
-                {/* الجنسيات */}
                 <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
                   <h3 className="font-bold text-[var(--lux-black)] mb-4">🌍 أبرز الجنسيات</h3>
                   <div className="space-y-3">
@@ -448,27 +509,17 @@ export default function AdminPage() {
                         <Bar key={n} label={n} value={c} max={students.length} color="bg-blue-400" />
                       ));
                     })()}
-                    {students.filter(s => !s.nationality).length > 0 && (
-                      <Bar label="غير محدد" value={students.filter(s => !s.nationality).length} max={students.length} color="bg-gray-300" />
-                    )}
                   </div>
                 </div>
-
-                {/* الجلسات القادمة */}
                 <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
                   <h3 className="font-bold text-[var(--lux-black)] mb-4">🗓️ الجلسات القادمة</h3>
                   {sessions.filter(s => new Date(s.date) >= new Date()).length === 0 ? (
-                    <div className="text-center py-6 text-[var(--text-gray)]">
-                      <p className="text-3xl mb-2">📅</p>
-                      <p className="text-sm">لا توجد جلسات قادمة</p>
-                    </div>
+                    <div className="text-center py-6 text-[var(--text-gray)]"><p className="text-3xl mb-2">📅</p><p className="text-sm">لا توجد جلسات قادمة</p></div>
                   ) : (
                     <div className="space-y-3">
                       {sessions.filter(s => new Date(s.date) >= new Date()).slice(0, 4).map(session => (
                         <div key={session.id} className="flex items-center gap-3 p-3 bg-[var(--soft-white)] rounded-xl">
-                          <div className="w-8 h-8 rounded-lg bg-[var(--gold)]/10 flex items-center justify-center shrink-0">
-                            <span className="text-sm">🎥</span>
-                          </div>
+                          <div className="w-8 h-8 rounded-lg bg-[var(--gold)]/10 flex items-center justify-center shrink-0"><span className="text-sm">🎥</span></div>
                           <div className="flex-1 overflow-hidden">
                             <p className="text-sm font-medium text-[var(--lux-black)] truncate">{session.title}</p>
                             <p className="text-xs text-[var(--text-gray)]">{new Date(session.date).toLocaleDateString("ar-SA", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
@@ -480,8 +531,6 @@ export default function AdminPage() {
                   )}
                 </div>
               </div>
-
-              {/* آخر المسجلين */}
               <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-bold text-[var(--lux-black)]">🆕 آخر المسجلين</h3>
@@ -498,14 +547,12 @@ export default function AdminPage() {
                           </div>
                           <div>
                             <p className="text-sm font-medium text-[var(--lux-black)]">{name}</p>
-                            <p className="text-xs text-[var(--text-gray)]">{student.email}</p>
+                            <p className="text-xs text-[var(--text-gray)]">{student.email} • {student.gender === "female" || student.gender === "أنثى" ? "👩" : "👨"}</p>
                           </div>
                         </div>
                         <div className="flex gap-2">
-                          <button onClick={() => { updateStudent(student.id, { registrationStatus: "approved" }); }}
-                            className="text-xs bg-green-500 text-white px-3 py-1 rounded-lg hover:bg-green-600 transition">قبول</button>
-                          <button onClick={() => { setActiveTab("students"); setSelected(student); }}
-                            className="text-xs border border-gray-200 text-[var(--text-gray)] px-3 py-1 rounded-lg hover:bg-gray-50 transition">تفاصيل</button>
+                          <button onClick={() => updateStudent(student.id, { registrationStatus: "approved" })} className="text-xs bg-green-500 text-white px-3 py-1 rounded-lg hover:bg-green-600 transition">قبول</button>
+                          <button onClick={() => { setActiveTab("students"); setSelected(student); }} className="text-xs border border-gray-200 text-[var(--text-gray)] px-3 py-1 rounded-lg hover:bg-gray-50 transition">تفاصيل</button>
                         </div>
                       </div>
                     );
@@ -518,7 +565,7 @@ export default function AdminPage() {
             </div>
           )}
 
-          {/* ===== الطلاب ===== */}
+          {/* الطلاب مع فلتر الجنس */}
           {activeTab === "students" && (
             <>
               <div className="flex flex-wrap gap-3 mb-5">
@@ -532,6 +579,19 @@ export default function AdminPage() {
                     </button>
                   ))}
                 </div>
+                {/* فلتر الجنس */}
+                <div className="flex gap-2">
+                  {[
+                    { val: "all", label: "👥 الكل" },
+                    { val: "male", label: "👨 ذكور" },
+                    { val: "female", label: "👩 إناث" },
+                  ].map(g => (
+                    <button key={g.val} onClick={() => setGenderFilter(g.val)}
+                      className={`px-3 py-2 rounded-xl text-xs font-medium transition ${genderFilter === g.val ? (g.val === "male" ? "bg-blue-500 text-white" : g.val === "female" ? "bg-pink-500 text-white" : "bg-[var(--gold)] text-white") : "bg-white border border-gray-200 text-[var(--text-gray)]"}`}>
+                      {g.label}
+                    </button>
+                  ))}
+                </div>
                 <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)}
                   className="border border-gray-200 rounded-xl px-3 py-2 text-right text-black bg-white focus:outline-none focus:border-[var(--gold)] transition text-xs">
                   <option value="all">كل السنوات</option>
@@ -539,9 +599,7 @@ export default function AdminPage() {
                 </select>
                 <button onClick={() => exportCSV(filtered)} className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium bg-green-600 text-white hover:bg-green-700 transition">📥 Excel</button>
               </div>
-
-              <p className="text-xs text-[var(--text-gray)] mb-3">{filtered.length} نتيجة</p>
-
+              <p className="text-xs text-[var(--text-gray)] mb-3">{filtered.length} نتيجة {genderFilter === "male" ? "👨 ذكور" : genderFilter === "female" ? "👩 إناث" : ""}</p>
               <div className="flex gap-5">
                 <div className="flex-1">
                   {loadingStudents ? <div className="text-center py-10 text-[var(--gold)]">جاري التحميل...</div>
@@ -551,16 +609,20 @@ export default function AdminPage() {
                         {filtered.map((student) => {
                           const st = statusMap[student.registrationStatus || "pending"];
                           const name = `${student.firstName || ""} ${student.lastName || ""}`.trim() || student.email;
+                          const isFemale = student.gender === "female" || student.gender === "أنثى";
                           return (
                             <div key={student.id} onClick={() => { setSelected(student); setShowMsgForm(false); }}
                               className={`bg-white rounded-xl p-4 shadow-sm cursor-pointer hover:shadow-md transition border-2 ${selected?.id === student.id ? "border-[var(--gold)]" : "border-transparent hover:border-gray-200"}`}>
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
-                                  <div className="w-9 h-9 rounded-full bg-[var(--lux-black)] flex items-center justify-center shrink-0">
+                                  <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${isFemale ? "bg-pink-900" : "bg-[var(--lux-black)]"}`}>
                                     <span className="text-[var(--gold)] font-bold text-sm">{name.charAt(0)}</span>
                                   </div>
                                   <div>
-                                    <p className="font-semibold text-[var(--lux-black)] text-sm">{name}</p>
+                                    <div className="flex items-center gap-2">
+                                      <p className="font-semibold text-[var(--lux-black)] text-sm">{name}</p>
+                                      <span className={`text-xs px-1.5 py-0.5 rounded-full ${isFemale ? "bg-pink-100 text-pink-700" : "bg-blue-100 text-blue-700"}`}>{isFemale ? "👩" : "👨"}</span>
+                                    </div>
                                     <p className="text-xs text-[var(--text-gray)]">{student.email}</p>
                                     <div className="flex items-center gap-2 mt-0.5">
                                       {student.phone && <p className="text-xs text-[var(--text-gray)]">{student.phone}</p>}
@@ -577,7 +639,6 @@ export default function AdminPage() {
                       </div>
                     )}
                 </div>
-
                 {selected && (
                   <div className="w-72 shrink-0">
                     <div className="bg-white rounded-2xl shadow-sm p-5 sticky top-6">
@@ -591,9 +652,7 @@ export default function AdminPage() {
                           {statusMap[selected.registrationStatus || "pending"].label}
                         </span>
                       </div>
-
                       {statusMsg && <div className="mb-3 p-2 bg-green-50 border border-green-200 rounded-lg text-green-600 text-xs text-center">{statusMsg}</div>}
-
                       <div className="flex flex-col gap-1.5 mb-4 text-xs">
                         {selected.birthDate && <InfoRow label="العمر" value={`${calcAge(selected.birthDate)} سنة`} />}
                         {selected.gender && <InfoRow label="الجنس" value={genderMap[selected.gender] || selected.gender} />}
@@ -603,52 +662,35 @@ export default function AdminPage() {
                         {selected.residenceCountry && <InfoRow label="بلد الإقامة" value={selected.residenceCountry} />}
                         {selected.educationLevel && <InfoRow label="المؤهل" value={educationMap[selected.educationLevel] || selected.educationLevel} />}
                       </div>
-
                       <div className="mb-3">
                         <label className="block text-xs font-medium text-[var(--text-gray)] mb-1">الشعبة</label>
-                        <select
-                          onChange={(e) => assignStudentToSection(selected.id, e.target.value ? parseInt(e.target.value) : null)}
-                          disabled={assigningSection}
-                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-right text-black bg-white focus:outline-none focus:border-[var(--gold)] transition text-xs">
+                        <select onChange={(e) => assignStudentToSection(selected.id, e.target.value ? parseInt(e.target.value) : null)} disabled={assigningSection} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-right text-black bg-white focus:outline-none focus:border-[var(--gold)] transition text-xs">
                           <option value="">بدون شعبة</option>
-                          {sections.filter(s => s.gender === (selected.gender === "أنثى" ? "female" : "male") && s.academic_year === selected.academicYear).map(s => (
+                          {sections.filter(s => s.gender === (selected.gender === "أنثى" || selected.gender === "female" ? "female" : "male") && s.academic_year === selected.academicYear).map(s => (
                             <option key={s.id} value={s.id}>{s.name} ({s.student_count}/{s.max_students})</option>
                           ))}
                         </select>
                       </div>
-
                       <div className="mb-3">
                         <label className="block text-xs font-medium text-[var(--text-gray)] mb-1">السنة الدراسية</label>
-                        <select value={selected.academicYear || ""} onChange={(e) => updateStudent(selected.id, { academicYear: e.target.value })}
-                          disabled={updating} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-right text-black bg-white focus:outline-none focus:border-[var(--gold)] transition text-xs">
+                        <select value={selected.academicYear || ""} onChange={(e) => updateStudent(selected.id, { academicYear: e.target.value })} disabled={updating} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-right text-black bg-white focus:outline-none focus:border-[var(--gold)] transition text-xs">
                           <option value="">غير محدد</option>
                           {Object.entries(yearMap).map(([val, label]) => <option key={val} value={val}>{label}</option>)}
                         </select>
                       </div>
-
                       <div className="flex flex-col gap-2 mb-3">
-                        <button onClick={() => updateStudent(selected.id, { registrationStatus: "approved" })} disabled={updating || selected.registrationStatus === "approved"}
-                          className="w-full bg-green-500 text-white py-2 rounded-lg font-semibold hover:bg-green-600 transition disabled:opacity-40 text-xs">✓ قبول + إشعار 📧</button>
-                        <button onClick={() => updateStudent(selected.id, { registrationStatus: "rejected" })} disabled={updating || selected.registrationStatus === "rejected"}
-                          className="w-full bg-red-500 text-white py-2 rounded-lg font-semibold hover:bg-red-600 transition disabled:opacity-40 text-xs">✗ رفض + إشعار 📧</button>
-                        <button onClick={() => updateStudent(selected.id, { registrationStatus: "pending" })} disabled={updating || selected.registrationStatus === "pending"}
-                          className="w-full border border-gray-200 text-[var(--text-gray)] py-2 rounded-lg font-semibold hover:bg-gray-50 transition disabled:opacity-40 text-xs">إعادة للمراجعة</button>
+                        <button onClick={() => updateStudent(selected.id, { registrationStatus: "approved" })} disabled={updating || selected.registrationStatus === "approved"} className="w-full bg-green-500 text-white py-2 rounded-lg font-semibold hover:bg-green-600 transition disabled:opacity-40 text-xs">✓ قبول + إشعار 📧</button>
+                        <button onClick={() => updateStudent(selected.id, { registrationStatus: "rejected" })} disabled={updating || selected.registrationStatus === "rejected"} className="w-full bg-red-500 text-white py-2 rounded-lg font-semibold hover:bg-red-600 transition disabled:opacity-40 text-xs">✗ رفض + إشعار 📧</button>
+                        <button onClick={() => updateStudent(selected.id, { registrationStatus: "pending" })} disabled={updating || selected.registrationStatus === "pending"} className="w-full border border-gray-200 text-[var(--text-gray)] py-2 rounded-lg font-semibold hover:bg-gray-50 transition disabled:opacity-40 text-xs">إعادة للمراجعة</button>
                       </div>
-
-                      <button onClick={() => setShowMsgForm(v => !v)}
-                        className="w-full border border-[var(--gold)] text-[var(--gold)] py-2 rounded-lg font-semibold hover:bg-[var(--gold)]/5 transition text-xs">
-                        ✉️ رسالة مخصصة
-                      </button>
-
+                      <button onClick={() => setShowMsgForm(v => !v)} className="w-full border border-[var(--gold)] text-[var(--gold)] py-2 rounded-lg font-semibold hover:bg-[var(--gold)]/5 transition text-xs">✉️ رسالة مخصصة</button>
                       {showMsgForm && (
                         <div className="mt-3 pt-3 border-t border-gray-100">
                           {msgResult && <div className={`mb-2 p-2 rounded-lg text-xs text-center ${msgResult.includes("يرجى") ? "bg-red-50 text-red-600" : "bg-green-50 text-green-600"}`}>{msgResult}</div>}
                           <div className="flex flex-col gap-2">
                             <input value={msgForm.subject} onChange={(e) => setMsgForm(p => ({ ...p, subject: e.target.value }))} placeholder="الموضوع *" className={inp} />
                             <textarea value={msgForm.body} onChange={(e) => setMsgForm(p => ({ ...p, body: e.target.value }))} placeholder="نص الرسالة *" rows={3} className={`${inp} resize-none`} />
-                            <button onClick={sendCustomMessage} disabled={sendingMsg} className="w-full bg-[var(--gold)] text-white py-2 rounded-lg font-semibold hover:opacity-90 transition disabled:opacity-60 text-xs">
-                              {sendingMsg ? "جاري الإرسال..." : "إرسال 📧"}
-                            </button>
+                            <button onClick={sendCustomMessage} disabled={sendingMsg} className="w-full bg-[var(--gold)] text-white py-2 rounded-lg font-semibold hover:opacity-90 transition disabled:opacity-60 text-xs">{sendingMsg ? "جاري الإرسال..." : "إرسال 📧"}</button>
                           </div>
                         </div>
                       )}
@@ -659,15 +701,14 @@ export default function AdminPage() {
             </>
           )}
 
-          {/* ===== المدرسون ===== */}
+          {/* المدرسون */}
           {activeTab === "teachers" && (
             <div className="flex gap-5">
               <div className="flex-1">
                 {teacherMsg && <div className={`mb-4 p-3 rounded-xl text-sm text-center ${teacherMsg.includes("خطأ") || teacherMsg.includes("يرجى") ? "bg-red-50 border border-red-200 text-red-600" : "bg-green-50 border border-green-200 text-green-600"}`}>{teacherMsg}</div>}
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="font-bold text-[var(--lux-black)]">قائمة المدرسين <span className="text-[var(--gold)]">({teachers.length})</span></h3>
-                  <button onClick={() => { setShowTeacherForm(true); setEditingTeacher(null); setTeacherForm({ firstName: "", lastName: "", email: "", password: "", phone: "", teacherYear: "year1", teacherSubject: "" }); }}
-                    className="bg-[var(--gold)] text-black px-4 py-2 rounded-xl text-sm font-bold hover:opacity-90 transition">+ إضافة مدرس</button>
+                  <button onClick={() => { setShowTeacherForm(true); setEditingTeacher(null); setTeacherForm({ firstName: "", lastName: "", email: "", password: "", phone: "", teacherYear: "year1", teacherSubject: "" }); }} className="bg-[var(--gold)] text-black px-4 py-2 rounded-xl text-sm font-bold hover:opacity-90 transition">+ إضافة مدرس</button>
                 </div>
                 {loadingTeachers ? <div className="text-center py-10 text-[var(--gold)]">جاري التحميل...</div>
                   : teachers.length === 0 ? <div className="text-center py-10 text-[var(--text-gray)]">لا يوجد مدرسون بعد</div>
@@ -694,8 +735,7 @@ export default function AdminPage() {
                                 </div>
                               </div>
                               <div className="flex flex-col gap-1.5 shrink-0">
-                                <button onClick={() => { setEditingTeacher(teacher); setTeacherForm({ firstName: teacher.firstName || "", lastName: teacher.lastName || "", email: teacher.email, password: "", phone: teacher.phone || "", teacherYear: teacher.teacherYear || "year1", teacherSubject: teacher.teacherSubject || "" }); setShowTeacherForm(true); }}
-                                  className="text-xs border border-gray-200 px-3 py-1 rounded-lg hover:bg-gray-50 transition text-[var(--text-gray)]">تعديل</button>
+                                <button onClick={() => { setEditingTeacher(teacher); setTeacherForm({ firstName: teacher.firstName || "", lastName: teacher.lastName || "", email: teacher.email, password: "", phone: teacher.phone || "", teacherYear: teacher.teacherYear || "year1", teacherSubject: teacher.teacherSubject || "" }); setShowTeacherForm(true); }} className="text-xs border border-gray-200 px-3 py-1 rounded-lg hover:bg-gray-50 transition text-[var(--text-gray)]">تعديل</button>
                                 <button onClick={() => deleteTeacher(teacher)} className="text-xs border border-red-200 px-3 py-1 rounded-lg hover:bg-red-50 transition text-red-500">حذف</button>
                               </div>
                             </div>
@@ -732,18 +772,15 @@ export default function AdminPage() {
             </div>
           )}
 
-          {/* ===== الشعب ===== */}
+          {/* الشعب */}
           {activeTab === "sections" && (
             <div className="flex gap-5">
               <div className="flex-1">
                 {sectionMsg && <div className={`mb-4 p-3 rounded-xl text-sm text-center ${sectionMsg.includes("خطأ") || sectionMsg.includes("يرجى") ? "bg-red-50 border border-red-200 text-red-600" : "bg-green-50 border border-green-200 text-green-600"}`}>{sectionMsg}</div>}
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="font-bold text-[var(--lux-black)]">الشعب الدراسية <span className="text-[var(--gold)]">({sections.length})</span></h3>
-                  <button onClick={() => { setShowSectionForm(true); setEditingSection(null); setSectionForm({ name: "", academicYear: "year1", gender: "male", teacherId: "", maxStudents: "50" }); }}
-                    className="bg-[var(--gold)] text-black px-4 py-2 rounded-xl text-sm font-bold hover:opacity-90 transition">+ إضافة شعبة</button>
+                  <button onClick={() => { setShowSectionForm(true); setEditingSection(null); setSectionForm({ name: "", academicYear: "year1", gender: "male", teacherId: "", maxStudents: "50" }); }} className="bg-[var(--gold)] text-black px-4 py-2 rounded-xl text-sm font-bold hover:opacity-90 transition">+ إضافة شعبة</button>
                 </div>
-
-                {/* فلتر سريع */}
                 <div className="flex gap-2 mb-4 flex-wrap">
                   {["year1","year2","year3","year4","year5"].map(y => (
                     <span key={y} className="text-xs bg-[var(--gold)]/10 text-[var(--gold)] px-3 py-1 rounded-full font-medium">
@@ -751,7 +788,6 @@ export default function AdminPage() {
                     </span>
                   ))}
                 </div>
-
                 {loadingSections ? <div className="text-center py-10 text-[var(--gold)]">جاري التحميل...</div>
                   : sections.length === 0 ? <div className="text-center py-10 text-[var(--text-gray)]">لا توجد شعب بعد</div>
                   : (
@@ -762,8 +798,7 @@ export default function AdminPage() {
                         return (
                           <div key={year}>
                             <h4 className="font-bold text-[var(--lux-black)] text-sm mb-2 flex items-center gap-2">
-                              <span className="w-2 h-2 rounded-full bg-[var(--gold)] inline-block"/>
-                              {yearMap[year]}
+                              <span className="w-2 h-2 rounded-full bg-[var(--gold)] inline-block"/>{yearMap[year]}
                             </h4>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                               {yearSections.map(section => {
@@ -775,32 +810,20 @@ export default function AdminPage() {
                                       <div>
                                         <div className="flex items-center gap-2">
                                           <p className="font-bold text-[var(--lux-black)] text-sm">{section.name}</p>
-                                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${section.gender === "female" ? "bg-pink-100 text-pink-700" : "bg-blue-100 text-blue-700"}`}>
-                                            {section.gender === "female" ? "👩 إناث" : "👨 ذكور"}
-                                          </span>
+                                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${section.gender === "female" ? "bg-pink-100 text-pink-700" : "bg-blue-100 text-blue-700"}`}>{section.gender === "female" ? "👩 إناث" : "👨 ذكور"}</span>
                                         </div>
-                                        {(section.teacher_first || section.teacher_last) && (
-                                          <p className="text-xs text-[var(--text-gray)] mt-0.5">
-                                            👨‍🏫 {section.teacher_first} {section.teacher_last}
-                                          </p>
-                                        )}
+                                        {(section.teacher_first || section.teacher_last) && <p className="text-xs text-[var(--text-gray)] mt-0.5">👨‍🏫 {section.teacher_first} {section.teacher_last}</p>}
                                       </div>
                                       <div className="flex gap-1 shrink-0">
-                                        <button onClick={() => { setEditingSection(section); setSectionForm({ name: section.name, academicYear: section.academic_year, gender: section.gender, teacherId: section.teacher_id?.toString() || "", maxStudents: section.max_students.toString() }); setShowSectionForm(true); }}
-                                          className="text-xs border border-gray-200 px-2 py-1 rounded-lg hover:bg-gray-50 transition text-[var(--text-gray)]">✏️</button>
-                                        <button onClick={() => deleteSection(section.id)}
-                                          className="text-xs border border-red-200 px-2 py-1 rounded-lg hover:bg-red-50 transition text-red-500">🗑️</button>
+                                        <button onClick={() => { setEditingSection(section); setSectionForm({ name: section.name, academicYear: section.academic_year, gender: section.gender, teacherId: section.teacher_id?.toString() || "", maxStudents: section.max_students.toString() }); setShowSectionForm(true); }} className="text-xs border border-gray-200 px-2 py-1 rounded-lg hover:bg-gray-50 transition text-[var(--text-gray)]">✏️</button>
+                                        <button onClick={() => deleteSection(section.id)} className="text-xs border border-red-200 px-2 py-1 rounded-lg hover:bg-red-50 transition text-red-500">🗑️</button>
                                       </div>
                                     </div>
-                                    {/* شريط التعبئة */}
                                     <div className="flex items-center gap-2">
                                       <div className="flex-1 bg-gray-100 rounded-full h-2">
                                         <div className={`h-2 rounded-full transition-all ${isFull ? "bg-red-500" : pct > 70 ? "bg-yellow-400" : "bg-green-500"}`} style={{ width: `${pct}%` }} />
                                       </div>
-                                      <span className={`text-xs font-bold shrink-0 ${isFull ? "text-red-600" : "text-[var(--text-gray)]"}`}>
-                                        {section.student_count}/{section.max_students}
-                                        {isFull && " 🔴 ممتلئة"}
-                                      </span>
+                                      <span className={`text-xs font-bold shrink-0 ${isFull ? "text-red-600" : "text-[var(--text-gray)]"}`}>{section.student_count}/{section.max_students}{isFull && " 🔴"}</span>
                                     </div>
                                   </div>
                                 );
@@ -812,47 +835,18 @@ export default function AdminPage() {
                     </div>
                   )}
               </div>
-
-              {/* نموذج إضافة/تعديل شعبة */}
               {showSectionForm && (
                 <div className="w-72 shrink-0">
                   <div className="bg-white rounded-2xl shadow-sm p-5 sticky top-6 border border-gray-100">
                     <h3 className="font-bold text-[var(--lux-black)] mb-4 text-sm">{editingSection ? "✏️ تعديل الشعبة" : "➕ إضافة شعبة جديدة"}</h3>
                     <div className="flex flex-col gap-2.5">
-                      <div>
-                        <label className="block text-xs text-[var(--text-gray)] mb-1">اسم الشعبة *</label>
-                        <input value={sectionForm.name} onChange={(e) => setSectionForm(p => ({ ...p, name: e.target.value }))} placeholder="مثال: شعبة أ - ذكور" className={inp} />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-[var(--text-gray)] mb-1">السنة الدراسية *</label>
-                        <select value={sectionForm.academicYear} onChange={(e) => setSectionForm(p => ({ ...p, academicYear: e.target.value }))} className={inp}>
-                          {Object.entries(yearMap).map(([val, label]) => <option key={val} value={val}>{label}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs text-[var(--text-gray)] mb-1">الجنس *</label>
-                        <select value={sectionForm.gender} onChange={(e) => setSectionForm(p => ({ ...p, gender: e.target.value }))} className={inp}>
-                          <option value="male">👨 ذكور</option>
-                          <option value="female">👩 إناث</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs text-[var(--text-gray)] mb-1">المدرس المسؤول</label>
-                        <select value={sectionForm.teacherId} onChange={(e) => setSectionForm(p => ({ ...p, teacherId: e.target.value }))} className={inp}>
-                          <option value="">بدون مدرس</option>
-                          {teachers.map(t => (
-                            <option key={t.id} value={t.id}>{t.firstName} {t.lastName} — {yearMap[t.teacherYear || ""]}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs text-[var(--text-gray)] mb-1">الحد الأقصى للطلاب</label>
-                        <input type="number" value={sectionForm.maxStudents} onChange={(e) => setSectionForm(p => ({ ...p, maxStudents: e.target.value }))} min="1" max="100" className={inp} />
-                      </div>
+                      <div><label className="block text-xs text-[var(--text-gray)] mb-1">اسم الشعبة *</label><input value={sectionForm.name} onChange={(e) => setSectionForm(p => ({ ...p, name: e.target.value }))} placeholder="مثال: شعبة أ - ذكور" className={inp} /></div>
+                      <div><label className="block text-xs text-[var(--text-gray)] mb-1">السنة الدراسية *</label><select value={sectionForm.academicYear} onChange={(e) => setSectionForm(p => ({ ...p, academicYear: e.target.value }))} className={inp}>{Object.entries(yearMap).map(([val, label]) => <option key={val} value={val}>{label}</option>)}</select></div>
+                      <div><label className="block text-xs text-[var(--text-gray)] mb-1">الجنس *</label><select value={sectionForm.gender} onChange={(e) => setSectionForm(p => ({ ...p, gender: e.target.value }))} className={inp}><option value="male">👨 ذكور</option><option value="female">👩 إناث</option></select></div>
+                      <div><label className="block text-xs text-[var(--text-gray)] mb-1">المدرس المسؤول</label><select value={sectionForm.teacherId} onChange={(e) => setSectionForm(p => ({ ...p, teacherId: e.target.value }))} className={inp}><option value="">بدون مدرس</option>{teachers.map(t => <option key={t.id} value={t.id}>{t.firstName} {t.lastName} — {yearMap[t.teacherYear || ""]}</option>)}</select></div>
+                      <div><label className="block text-xs text-[var(--text-gray)] mb-1">الحد الأقصى للطلاب</label><input type="number" value={sectionForm.maxStudents} onChange={(e) => setSectionForm(p => ({ ...p, maxStudents: e.target.value }))} min="1" max="100" className={inp} /></div>
                       <div className="flex gap-2 mt-1">
-                        <button onClick={saveSection} disabled={savingSection} className="flex-1 bg-[var(--gold)] text-black py-2 rounded-xl font-bold hover:opacity-90 transition disabled:opacity-60 text-sm">
-                          {savingSection ? "..." : editingSection ? "حفظ" : "إنشاء"}
-                        </button>
+                        <button onClick={saveSection} disabled={savingSection} className="flex-1 bg-[var(--gold)] text-black py-2 rounded-xl font-bold hover:opacity-90 transition disabled:opacity-60 text-sm">{savingSection ? "..." : editingSection ? "حفظ" : "إنشاء"}</button>
                         <button onClick={() => { setShowSectionForm(false); setEditingSection(null); }} className="border border-gray-200 text-[var(--text-gray)] px-4 py-2 rounded-xl text-sm hover:bg-gray-50 transition">إلغاء</button>
                       </div>
                     </div>
@@ -862,7 +856,81 @@ export default function AdminPage() {
             </div>
           )}
 
-          {/* ===== الجلسات ===== */}
+          {/* الدروس المسجلة */}
+          {activeTab === "lessons" && (
+            <div className="flex gap-5">
+              <div className="flex-1">
+                {lessonMsg && <div className={`mb-4 p-3 rounded-xl text-sm text-center ${lessonMsg.includes("خطأ") || lessonMsg.includes("يرجى") ? "bg-red-50 border border-red-200 text-red-600" : "bg-green-50 border border-green-200 text-green-600"}`}>{lessonMsg}</div>}
+                <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+                  <h3 className="font-bold text-[var(--lux-black)]">الدروس المسجلة <span className="text-[var(--gold)]">({lessons.length})</span></h3>
+                  <div className="flex gap-2 flex-wrap">
+                    <select value={lessonYearFilter} onChange={(e) => setLessonYearFilter(e.target.value)} className="border border-gray-200 rounded-xl px-3 py-2 text-right text-black bg-white text-xs">
+                      <option value="all">كل السنوات</option>
+                      {Object.entries(yearMap).map(([val, label]) => <option key={val} value={val}>{label}</option>)}
+                    </select>
+                    <button onClick={() => setShowLessonForm(v => !v)} className="bg-[var(--gold)] text-black px-4 py-2 rounded-xl text-sm font-bold hover:opacity-90 transition">+ إضافة درس</button>
+                  </div>
+                </div>
+                {loadingLessons ? <div className="text-center py-10 text-[var(--gold)]">جاري التحميل...</div>
+                  : filteredLessons.length === 0 ? (
+                    <div className="text-center py-16 bg-white rounded-2xl">
+                      <p className="text-4xl mb-3">🎬</p>
+                      <p className="font-semibold text-[var(--lux-black)]">لا توجد دروس مسجلة بعد</p>
+                      <p className="text-sm text-[var(--text-gray)] mt-1">اضغط على "إضافة درس" لإضافة أول درس</p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-3">
+                      {filteredLessons.map((lesson) => (
+                        <div key={lesson.id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 hover:border-[var(--gold)]/30 transition">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-3 flex-1 overflow-hidden">
+                              <div className="w-10 h-10 rounded-lg bg-[var(--lux-black)] flex items-center justify-center shrink-0">
+                                <span className="text-[var(--gold)]">🎬</span>
+                              </div>
+                              <div className="overflow-hidden">
+                                <p className="font-semibold text-[var(--lux-black)] text-sm truncate">{lesson.title}</p>
+                                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                  <span className="text-xs bg-[var(--gold)]/10 text-[var(--gold)] px-2 py-0.5 rounded-full">{yearMap[lesson.academic_year]}</span>
+                                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{lesson.subject}</span>
+                                  {lesson.duration && <span className="text-xs text-[var(--text-gray)]">⏱ {lesson.duration}</span>}
+                                </div>
+                                {lesson.description && <p className="text-xs text-[var(--text-gray)] mt-0.5 truncate">{lesson.description}</p>}
+                                <a href={lesson.video_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline truncate block mt-0.5">{lesson.video_url}</a>
+                              </div>
+                            </div>
+                            <button onClick={() => deleteLesson(lesson.id)} className="text-xs border border-red-200 px-3 py-1 rounded-lg hover:bg-red-50 transition text-red-500 shrink-0">حذف</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+              </div>
+
+              {/* نموذج إضافة درس */}
+              {showLessonForm && (
+                <div className="w-72 shrink-0">
+                  <div className="bg-white rounded-2xl shadow-sm p-5 sticky top-6 border border-gray-100">
+                    <h3 className="font-bold text-[var(--lux-black)] mb-4 text-sm">➕ إضافة درس جديد</h3>
+                    <div className="flex flex-col gap-2.5">
+                      <div><label className="block text-xs text-[var(--text-gray)] mb-1">عنوان الدرس *</label><input value={lessonForm.title} onChange={(e) => setLessonForm(p => ({ ...p, title: e.target.value }))} placeholder="مثال: شرح مقدمة الفقه" className={inp} /></div>
+                      <div><label className="block text-xs text-[var(--text-gray)] mb-1">رابط الفيديو *</label><input value={lessonForm.videoUrl} onChange={(e) => setLessonForm(p => ({ ...p, videoUrl: e.target.value }))} placeholder="https://youtube.com/..." className={inp} /></div>
+                      <div><label className="block text-xs text-[var(--text-gray)] mb-1">السنة الدراسية *</label><select value={lessonForm.academicYear} onChange={(e) => setLessonForm(p => ({ ...p, academicYear: e.target.value }))} className={inp}>{Object.entries(yearMap).map(([val, label]) => <option key={val} value={val}>{label}</option>)}</select></div>
+                      <div><label className="block text-xs text-[var(--text-gray)] mb-1">المادة *</label><input value={lessonForm.subject} onChange={(e) => setLessonForm(p => ({ ...p, subject: e.target.value }))} placeholder="مثال: أصول الفقه" className={inp} /></div>
+                      <div><label className="block text-xs text-[var(--text-gray)] mb-1">الوصف</label><textarea value={lessonForm.description} onChange={(e) => setLessonForm(p => ({ ...p, description: e.target.value }))} placeholder="وصف الدرس..." rows={2} className={`${inp} resize-none`} /></div>
+                      <div><label className="block text-xs text-[var(--text-gray)] mb-1">المدة</label><input value={lessonForm.duration} onChange={(e) => setLessonForm(p => ({ ...p, duration: e.target.value }))} placeholder="مثال: 45 دقيقة" className={inp} /></div>
+                      <div><label className="block text-xs text-[var(--text-gray)] mb-1">الترتيب</label><input type="number" value={lessonForm.order} onChange={(e) => setLessonForm(p => ({ ...p, order: e.target.value }))} min="0" className={inp} /></div>
+                      <div className="flex gap-2 mt-1">
+                        <button onClick={saveLesson} disabled={savingLesson} className="flex-1 bg-[var(--gold)] text-black py-2 rounded-xl font-bold hover:opacity-90 transition disabled:opacity-60 text-sm">{savingLesson ? "..." : "إضافة"}</button>
+                        <button onClick={() => setShowLessonForm(false)} className="border border-gray-200 text-[var(--text-gray)] px-4 py-2 rounded-xl text-sm hover:bg-gray-50 transition">إلغاء</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* الجلسات */}
           {activeTab === "sessions" && (
             <div className="flex gap-5">
               <div className="w-72 shrink-0">
@@ -873,11 +941,7 @@ export default function AdminPage() {
                     <div><label className="block text-xs text-[var(--text-gray)] mb-1">عنوان الجلسة *</label><input value={sessionForm.title} onChange={(e) => setSessionForm(p => ({ ...p, title: e.target.value }))} placeholder="مثال: لقاء إثرائي" className={inp} /></div>
                     <div><label className="block text-xs text-[var(--text-gray)] mb-1">التاريخ والوقت *</label><input type="datetime-local" value={sessionForm.date} onChange={(e) => setSessionForm(p => ({ ...p, date: e.target.value }))} className={inp} /></div>
                     <div><label className="block text-xs text-[var(--text-gray)] mb-1">رابط Zoom *</label><input value={sessionForm.zoomLink} onChange={(e) => setSessionForm(p => ({ ...p, zoomLink: e.target.value }))} placeholder="https://zoom.us/j/..." className={inp} /></div>
-                    <div><label className="block text-xs text-[var(--text-gray)] mb-1">السنة الدراسية</label>
-                      <select value={sessionForm.academicYear} onChange={(e) => setSessionForm(p => ({ ...p, academicYear: e.target.value }))} className={inp}>
-                        {Object.entries(yearMap).map(([val, label]) => <option key={val} value={val}>{label}</option>)}
-                      </select>
-                    </div>
+                    <div><label className="block text-xs text-[var(--text-gray)] mb-1">السنة الدراسية</label><select value={sessionForm.academicYear} onChange={(e) => setSessionForm(p => ({ ...p, academicYear: e.target.value }))} className={inp}>{Object.entries(yearMap).map(([val, label]) => <option key={val} value={val}>{label}</option>)}</select></div>
                     <label className="flex items-center gap-2 cursor-pointer text-sm"><input type="checkbox" checked={sessionForm.isActive} onChange={(e) => setSessionForm(p => ({ ...p, isActive: e.target.checked }))} className="accent-[var(--gold)]" /><span className="text-[var(--lux-black)]">نشطة</span></label>
                     <button onClick={saveSession} disabled={savingSession} className="w-full bg-[var(--gold)] text-black py-2 rounded-xl font-bold hover:opacity-90 transition disabled:opacity-60 text-sm">{savingSession ? "..." : editingSession ? "حفظ التعديلات" : "إضافة الجلسة"}</button>
                     {editingSession && <button onClick={() => { setEditingSession(null); setSessionForm({ title: "", date: "", zoomLink: "", academicYear: "year1", isActive: true }); }} className="w-full border border-gray-200 text-[var(--text-gray)] py-2 rounded-xl text-sm hover:bg-gray-50 transition">إلغاء</button>}
@@ -908,8 +972,7 @@ export default function AdminPage() {
                                 </div>
                               </div>
                               <div className="flex gap-2 shrink-0">
-                                <button onClick={() => { setEditingSession(session); setSessionForm({ title: session.title, date: session.date ? session.date.slice(0, 16) : "", zoomLink: session.zoomLink || "", academicYear: session.academicYear || "year1", isActive: session.isActive ?? true }); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-                                  className="text-xs border border-gray-200 px-3 py-1 rounded-lg hover:bg-gray-50 transition text-[var(--text-gray)]">تعديل</button>
+                                <button onClick={() => { setEditingSession(session); setSessionForm({ title: session.title, date: session.date ? session.date.slice(0, 16) : "", zoomLink: session.zoomLink || "", academicYear: session.academicYear || "year1", isActive: session.isActive ?? true }); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs border border-gray-200 px-3 py-1 rounded-lg hover:bg-gray-50 transition text-[var(--text-gray)]">تعديل</button>
                                 <button onClick={() => deleteSession(session.id)} className="text-xs border border-red-200 px-3 py-1 rounded-lg hover:bg-red-50 transition text-red-500">حذف</button>
                               </div>
                             </div>
