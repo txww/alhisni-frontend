@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 const STRAPI_URL = process.env.NEXT_PUBLIC_STRAPI_URL || "http://localhost:1337";
 const ADMIN_EMAIL = "admin@hisni.com";
 
-<<<<<<< HEAD
 const countryData: Record<string, { flag: string; code: string }> = {
   "سوريا": { flag: "🇸🇾", code: "+963" }, "سوري": { flag: "🇸🇾", code: "+963" },
   "السعودية": { flag: "🇸🇦", code: "+966" }, "سعودي": { flag: "🇸🇦", code: "+966" },
@@ -39,70 +38,6 @@ function formatWhatsApp(phone?: string, residenceCountry?: string, nationality?:
   if (!phone) return "";
   let clean = phone.replace(/[\s\-\(\)]/g, "");
   if (clean.startsWith("00")) clean = "+" + clean.slice(2);
-=======
-// خريطة رموز الدول ورمز الاتصال الدولي
-const countryData: Record<string, { flag: string; code: string }> = {
-  "سوريا": { flag: "🇸🇾", code: "+963" },
-  "سوري": { flag: "🇸🇾", code: "+963" },
-  "السعودية": { flag: "🇸🇦", code: "+966" },
-  "سعودي": { flag: "🇸🇦", code: "+966" },
-  "الأردن": { flag: "🇯🇴", code: "+962" },
-  "أردني": { flag: "🇯🇴", code: "+962" },
-  "مصر": { flag: "🇪🇬", code: "+20" },
-  "مصري": { flag: "🇪🇬", code: "+20" },
-  "العراق": { flag: "🇮🇶", code: "+964" },
-  "عراقي": { flag: "🇮🇶", code: "+964" },
-  "لبنان": { flag: "🇱🇧", code: "+961" },
-  "لبناني": { flag: "🇱🇧", code: "+961" },
-  "الكويت": { flag: "🇰🇼", code: "+965" },
-  "كويتي": { flag: "🇰🇼", code: "+965" },
-  "الإمارات": { flag: "🇦🇪", code: "+971" },
-  "إماراتي": { flag: "🇦🇪", code: "+971" },
-  "قطر": { flag: "🇶🇦", code: "+974" },
-  "قطري": { flag: "🇶🇦", code: "+974" },
-  "البحرين": { flag: "🇧🇭", code: "+973" },
-  "بحريني": { flag: "🇧🇭", code: "+973" },
-  "عمان": { flag: "🇴🇲", code: "+968" },
-  "عُمان": { flag: "🇴🇲", code: "+968" },
-  "عماني": { flag: "🇴🇲", code: "+968" },
-  "اليمن": { flag: "🇾🇪", code: "+967" },
-  "يمني": { flag: "🇾🇪", code: "+967" },
-  "ليبيا": { flag: "🇱🇾", code: "+218" },
-  "ليبي": { flag: "🇱🇾", code: "+218" },
-  "تونس": { flag: "🇹🇳", code: "+216" },
-  "تونسي": { flag: "🇹🇳", code: "+216" },
-  "الجزائر": { flag: "🇩🇿", code: "+213" },
-  "جزائري": { flag: "🇩🇿", code: "+213" },
-  "المغرب": { flag: "🇲🇦", code: "+212" },
-  "مغربي": { flag: "🇲🇦", code: "+212" },
-  "السودان": { flag: "🇸🇩", code: "+249" },
-  "سوداني": { flag: "🇸🇩", code: "+249" },
-  "تركيا": { flag: "🇹🇷", code: "+90" },
-  "تركي": { flag: "🇹🇷", code: "+90" },
-  "ألمانيا": { flag: "🇩🇪", code: "+49" },
-  "المانيا": { flag: "🇩🇪", code: "+49" },
-  "هولندا": { flag: "🇳🇱", code: "+31" },
-  "السويد": { flag: "🇸🇪", code: "+46" },
-  "النرويج": { flag: "🇳🇴", code: "+47" },
-  "الدنمارك": { flag: "🇩🇰", code: "+45" },
-  "فرنسا": { flag: "🇫🇷", code: "+33" },
-  "بريطانيا": { flag: "🇬🇧", code: "+44" },
-  "المملكة المتحدة": { flag: "🇬🇧", code: "+44" },
-  "أمريكا": { flag: "🇺🇸", code: "+1" },
-  "الولايات المتحدة": { flag: "🇺🇸", code: "+1" },
-  "كندا": { flag: "🇨🇦", code: "+1" },
-  "أستراليا": { flag: "🇦🇺", code: "+61" },
-};
-
-// دالة تنسيق رقم الواتساب
-function formatWhatsApp(phone?: string, residenceCountry?: string, nationality?: string): string {
-  if (!phone) return "";
-  // نظف الرقم من المسافات والشرطات
-  let clean = phone.replace(/[\s\-\(\)]/g, "");
-  // إذا الرقم يبدأ بـ 00 حوّله لـ +
-  if (clean.startsWith("00")) clean = "+" + clean.slice(2);
-  // إذا الرقم ما عنده كود دولي، أضف كود البلد
->>>>>>> 6f39a32e6dd91006a25283a6d28f1632919e2a29
   if (!clean.startsWith("+")) {
     const country = residenceCountry || nationality || "";
     const found = Object.entries(countryData).find(([key]) => country.includes(key));
@@ -111,10 +46,6 @@ function formatWhatsApp(phone?: string, residenceCountry?: string, nationality?:
   return clean;
 }
 
-<<<<<<< HEAD
-=======
-// دالة الحصول على علم البلد
->>>>>>> 6f39a32e6dd91006a25283a6d28f1632919e2a29
 function getCountryFlag(residenceCountry?: string, nationality?: string): string {
   const country = residenceCountry || nationality || "";
   const found = Object.entries(countryData).find(([key]) => country.includes(key));
@@ -140,10 +71,6 @@ interface Section {
   id: number; name: string; academic_year: string; gender: string; level?: string;
   max_students: number; student_count: number;
   teachers?: SectionTeacher[];
-}
-interface Lesson {
-  id: number; title: string; video_url: string; academic_year: string;
-  subject: string; description?: string; duration?: string; order: number;
 }
 interface Lesson {
   id: number; title: string; video_url: string; academic_year: string;
@@ -279,10 +206,6 @@ export default function AdminPage() {
   const [teacherForm, setTeacherForm] = useState({ firstName: "", lastName: "", email: "", password: "", phone: "", teacherYear: "year1", teacherSubject: "" });
   const [savingTeacher, setSavingTeacher] = useState(false);
 
-<<<<<<< HEAD
-=======
-  // الدروس المسجلة
->>>>>>> 6f39a32e6dd91006a25283a6d28f1632919e2a29
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [loadingLessons, setLoadingLessons] = useState(false);
   const [lessonMsg, setLessonMsg] = useState("");
@@ -343,7 +266,6 @@ export default function AdminPage() {
     setLoadingLessons(false);
   };
 
-<<<<<<< HEAD
   const fetchSectionTeachers = async (sectionId: number) => {
     try {
       const res = await fetch(`/api/sections/teachers?sectionId=${sectionId}`, { headers: { Authorization: `Bearer ${getJwt()}` } });
@@ -375,8 +297,6 @@ export default function AdminPage() {
     await fetchSections();
   };
 
-=======
->>>>>>> 6f39a32e6dd91006a25283a6d28f1632919e2a29
   const saveLesson = async () => {
     if (!lessonForm.title || !lessonForm.videoUrl || !lessonForm.subject) { setLessonMsg("يرجى ملء العنوان والرابط والمادة"); return; }
     setSavingLesson(true);
@@ -522,16 +442,7 @@ export default function AdminPage() {
     await fetchSessions();
   };
 
-  const [copied, setCopied] = useState<number | null>(null);
-
-  const copyWhatsApp = (student: Student) => {
-    const number = formatWhatsApp(student.phone, student.residenceCountry, student.nationality);
-    if (!number) return;
-    navigator.clipboard.writeText(number).then(() => {
-      setCopied(student.id);
-      setTimeout(() => setCopied(null), 2000);
-    });
-  };
+  const filtered = students.filter(s => {
     const mf = filter === "all" || s.registrationStatus === filter;
     const yf = yearFilter === "all" || s.academicYear === yearFilter;
     const gf = genderFilter === "all" || (genderFilter === "male" ? s.gender === "male" || s.gender === "ذكر" : s.gender === "female" || s.gender === "أنثى");
@@ -574,29 +485,10 @@ export default function AdminPage() {
         <aside className={`fixed lg:sticky top-16 h-[calc(100vh-4rem)] w-64 bg-[var(--lux-black)] border-l border-[var(--gold)]/10 flex flex-col z-30 transition-transform duration-300 ${sidebarOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"}`}>
           <div className="p-5 border-b border-[var(--gold)]/10">
             <div className="grid grid-cols-2 gap-2">
-<<<<<<< HEAD
               <div className="bg-white/5 rounded-xl p-3 text-center"><p className="text-[var(--gold)] font-bold text-xl">{students.length}</p><p className="text-white/50 text-xs mt-0.5">طالب</p></div>
               <div className="bg-white/5 rounded-xl p-3 text-center"><p className="text-yellow-400 font-bold text-xl">{pendingCount}</p><p className="text-white/50 text-xs mt-0.5">بانتظار</p></div>
               <div className="bg-white/5 rounded-xl p-3 text-center"><p className="text-blue-400 font-bold text-xl">{maleStudents.length}</p><p className="text-white/50 text-xs mt-0.5">👨 ذكور</p></div>
               <div className="bg-white/5 rounded-xl p-3 text-center"><p className="text-pink-400 font-bold text-xl">{femaleStudents.length}</p><p className="text-white/50 text-xs mt-0.5">👩 إناث</p></div>
-=======
-              <div className="bg-white/5 rounded-xl p-3 text-center">
-                <p className="text-[var(--gold)] font-bold text-xl">{students.length}</p>
-                <p className="text-white/50 text-xs mt-0.5">طالب</p>
-              </div>
-              <div className="bg-white/5 rounded-xl p-3 text-center">
-                <p className="text-yellow-400 font-bold text-xl">{pendingCount}</p>
-                <p className="text-white/50 text-xs mt-0.5">بانتظار</p>
-              </div>
-              <div className="bg-white/5 rounded-xl p-3 text-center">
-                <p className="text-blue-400 font-bold text-xl">{maleStudents.length}</p>
-                <p className="text-white/50 text-xs mt-0.5">👨 ذكور</p>
-              </div>
-              <div className="bg-white/5 rounded-xl p-3 text-center">
-                <p className="text-pink-400 font-bold text-xl">{femaleStudents.length}</p>
-                <p className="text-white/50 text-xs mt-0.5">👩 إناث</p>
-              </div>
->>>>>>> 6f39a32e6dd91006a25283a6d28f1632919e2a29
             </div>
           </div>
           <nav className="flex-1 p-3 overflow-y-auto">
@@ -606,17 +498,8 @@ export default function AdminPage() {
                 className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition mb-1 text-right ${activeTab === item.id ? "bg-[var(--gold)] text-black" : "text-white/70 hover:bg-white/5 hover:text-white"}`}>
                 <span>{item.icon}</span>
                 {item.label}
-<<<<<<< HEAD
                 {item.id === "students" && pendingCount > 0 && <span className={`mr-auto text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === item.id ? "bg-black/20 text-black" : "bg-yellow-400 text-black"}`}>{pendingCount}</span>}
                 {item.id === "lessons" && lessons.length > 0 && <span className={`mr-auto text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === item.id ? "bg-black/20 text-black" : "bg-[var(--gold)] text-black"}`}>{lessons.length}</span>}
-=======
-                {item.id === "students" && pendingCount > 0 && (
-                  <span className={`mr-auto text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === item.id ? "bg-black/20 text-black" : "bg-yellow-400 text-black"}`}>{pendingCount}</span>
-                )}
-                {item.id === "lessons" && lessons.length > 0 && (
-                  <span className={`mr-auto text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === item.id ? "bg-black/20 text-black" : "bg-[var(--gold)] text-black"}`}>{lessons.length}</span>
-                )}
->>>>>>> 6f39a32e6dd91006a25283a6d28f1632919e2a29
               </button>
             ))}
           </nav>
@@ -648,45 +531,20 @@ export default function AdminPage() {
                   </div>
                 ))}
               </div>
-<<<<<<< HEAD
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-white rounded-2xl p-5 shadow-sm border border-blue-100 cursor-pointer hover:border-blue-300 transition" onClick={() => { setActiveTab("students"); setGenderFilter("male"); }}>
                   <div className="flex items-center justify-between">
                     <div><p className="text-3xl font-bold text-blue-600">{maleStudents.length}</p><p className="text-[var(--text-gray)] text-sm mt-1">👨 الطلاب الذكور</p><p className="text-xs text-blue-400 mt-1">مقبول: {maleStudents.filter(s => s.registrationStatus === "approved").length}</p></div>
-=======
-
-              {/* ذكور وإناث */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-white rounded-2xl p-5 shadow-sm border border-blue-100 cursor-pointer hover:border-blue-300 transition" onClick={() => { setActiveTab("students"); setGenderFilter("male"); }}>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-3xl font-bold text-blue-600">{maleStudents.length}</p>
-                      <p className="text-[var(--text-gray)] text-sm mt-1">👨 الطلاب الذكور</p>
-                      <p className="text-xs text-blue-400 mt-1">مقبول: {maleStudents.filter(s => s.registrationStatus === "approved").length}</p>
-                    </div>
->>>>>>> 6f39a32e6dd91006a25283a6d28f1632919e2a29
                     <span className="text-5xl opacity-20">👨</span>
                   </div>
                 </div>
                 <div className="bg-white rounded-2xl p-5 shadow-sm border border-pink-100 cursor-pointer hover:border-pink-300 transition" onClick={() => { setActiveTab("students"); setGenderFilter("female"); }}>
                   <div className="flex items-center justify-between">
-<<<<<<< HEAD
                     <div><p className="text-3xl font-bold text-pink-600">{femaleStudents.length}</p><p className="text-[var(--text-gray)] text-sm mt-1">👩 الطالبات الإناث</p><p className="text-xs text-pink-400 mt-1">مقبول: {femaleStudents.filter(s => s.registrationStatus === "approved").length}</p></div>
-=======
-                    <div>
-                      <p className="text-3xl font-bold text-pink-600">{femaleStudents.length}</p>
-                      <p className="text-[var(--text-gray)] text-sm mt-1">👩 الطالبات الإناث</p>
-                      <p className="text-xs text-pink-400 mt-1">مقبول: {femaleStudents.filter(s => s.registrationStatus === "approved").length}</p>
-                    </div>
->>>>>>> 6f39a32e6dd91006a25283a6d28f1632919e2a29
                     <span className="text-5xl opacity-20">👩</span>
                   </div>
                 </div>
               </div>
-<<<<<<< HEAD
-=======
-
->>>>>>> 6f39a32e6dd91006a25283a6d28f1632919e2a29
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
                   <h3 className="font-bold text-[var(--lux-black)] mb-4">📊 توزيع حالات الطلاب</h3>
@@ -709,7 +567,6 @@ export default function AdminPage() {
                 <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
                   <h3 className="font-bold text-[var(--lux-black)] mb-4">🌍 أبرز الجنسيات</h3>
                   <div className="space-y-3">
-<<<<<<< HEAD
                     {(() => { const nat: Record<string, number> = {}; students.forEach(s => { if (s.nationality) nat[s.nationality] = (nat[s.nationality] || 0) + 1; }); return Object.entries(nat).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([n, c]) => <Bar key={n} label={n} value={c} max={students.length} color="bg-blue-400" />); })()}
                   </div>
                 </div>
@@ -718,35 +575,6 @@ export default function AdminPage() {
                   <div className="space-y-3">
                     {levels.map(lv => { const c = sections.filter(s => s.level === lv).length; return <Bar key={lv} label={lv} value={c} max={sections.length || 1} color="bg-purple-400" />; })}
                   </div>
-=======
-                    {(() => {
-                      const nat: Record<string, number> = {};
-                      students.forEach(s => { if (s.nationality) nat[s.nationality] = (nat[s.nationality] || 0) + 1; });
-                      return Object.entries(nat).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([n, c]) => (
-                        <Bar key={n} label={n} value={c} max={students.length} color="bg-blue-400" />
-                      ));
-                    })()}
-                  </div>
-                </div>
-                <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-                  <h3 className="font-bold text-[var(--lux-black)] mb-4">🗓️ الجلسات القادمة</h3>
-                  {sessions.filter(s => new Date(s.date) >= new Date()).length === 0 ? (
-                    <div className="text-center py-6 text-[var(--text-gray)]"><p className="text-3xl mb-2">📅</p><p className="text-sm">لا توجد جلسات قادمة</p></div>
-                  ) : (
-                    <div className="space-y-3">
-                      {sessions.filter(s => new Date(s.date) >= new Date()).slice(0, 4).map(session => (
-                        <div key={session.id} className="flex items-center gap-3 p-3 bg-[var(--soft-white)] rounded-xl">
-                          <div className="w-8 h-8 rounded-lg bg-[var(--gold)]/10 flex items-center justify-center shrink-0"><span className="text-sm">🎥</span></div>
-                          <div className="flex-1 overflow-hidden">
-                            <p className="text-sm font-medium text-[var(--lux-black)] truncate">{session.title}</p>
-                            <p className="text-xs text-[var(--text-gray)]">{new Date(session.date).toLocaleDateString("ar-SA", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
-                          </div>
-                          <span className="text-xs bg-[var(--gold)]/10 text-[var(--gold)] px-2 py-0.5 rounded-full shrink-0">{yearMap[session.academicYear]}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
->>>>>>> 6f39a32e6dd91006a25283a6d28f1632919e2a29
                 </div>
               </div>
               <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
@@ -760,18 +588,8 @@ export default function AdminPage() {
                     return (
                       <div key={student.id} className="flex items-center justify-between p-3 bg-[var(--soft-white)] rounded-xl">
                         <div className="flex items-center gap-3">
-<<<<<<< HEAD
                           <div className="w-8 h-8 rounded-full bg-[var(--lux-black)] flex items-center justify-center shrink-0"><span className="text-[var(--gold)] font-bold text-xs">{name.charAt(0)}</span></div>
                           <div><p className="text-sm font-medium text-[var(--lux-black)]">{name}</p><p className="text-xs text-[var(--text-gray)]">{student.email} • {student.gender === "female" || student.gender === "أنثى" ? "👩" : "👨"}</p></div>
-=======
-                          <div className="w-8 h-8 rounded-full bg-[var(--lux-black)] flex items-center justify-center shrink-0">
-                            <span className="text-[var(--gold)] font-bold text-xs">{name.charAt(0)}</span>
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-[var(--lux-black)]">{name}</p>
-                            <p className="text-xs text-[var(--text-gray)]">{student.email} • {student.gender === "female" || student.gender === "أنثى" ? "👩" : "👨"}</p>
-                          </div>
->>>>>>> 6f39a32e6dd91006a25283a6d28f1632919e2a29
                         </div>
                         <div className="flex gap-2">
                           <button onClick={() => updateStudent(student.id, { registrationStatus: "approved" })} className="text-xs bg-green-500 text-white px-3 py-1 rounded-lg hover:bg-green-600 transition">قبول</button>
@@ -786,11 +604,7 @@ export default function AdminPage() {
             </div>
           )}
 
-<<<<<<< HEAD
           {/* الطلاب */}
-=======
-          {/* الطلاب مع فلتر الجنس */}
->>>>>>> 6f39a32e6dd91006a25283a6d28f1632919e2a29
           {activeTab === "students" && (
             <>
               <div className="flex flex-wrap gap-3 mb-5">
@@ -802,30 +616,12 @@ export default function AdminPage() {
                     </button>
                   ))}
                 </div>
-<<<<<<< HEAD
                 <div className="flex gap-2">
                   {[{ val: "all", label: "👥 الكل" }, { val: "male", label: "👨 ذكور" }, { val: "female", label: "👩 إناث" }].map(g => (
                     <button key={g.val} onClick={() => setGenderFilter(g.val)} className={`px-3 py-2 rounded-xl text-xs font-medium transition ${genderFilter === g.val ? (g.val === "male" ? "bg-blue-500 text-white" : g.val === "female" ? "bg-pink-500 text-white" : "bg-[var(--gold)] text-white") : "bg-white border border-gray-200 text-[var(--text-gray)]"}`}>{g.label}</button>
                   ))}
                 </div>
                 <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)} className="border border-gray-200 rounded-xl px-3 py-2 text-right text-black bg-white focus:outline-none focus:border-[var(--gold)] transition text-xs">
-=======
-                {/* فلتر الجنس */}
-                <div className="flex gap-2">
-                  {[
-                    { val: "all", label: "👥 الكل" },
-                    { val: "male", label: "👨 ذكور" },
-                    { val: "female", label: "👩 إناث" },
-                  ].map(g => (
-                    <button key={g.val} onClick={() => setGenderFilter(g.val)}
-                      className={`px-3 py-2 rounded-xl text-xs font-medium transition ${genderFilter === g.val ? (g.val === "male" ? "bg-blue-500 text-white" : g.val === "female" ? "bg-pink-500 text-white" : "bg-[var(--gold)] text-white") : "bg-white border border-gray-200 text-[var(--text-gray)]"}`}>
-                      {g.label}
-                    </button>
-                  ))}
-                </div>
-                <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)}
-                  className="border border-gray-200 rounded-xl px-3 py-2 text-right text-black bg-white focus:outline-none focus:border-[var(--gold)] transition text-xs">
->>>>>>> 6f39a32e6dd91006a25283a6d28f1632919e2a29
                   <option value="all">كل السنوات</option>
                   {Object.entries(yearMap).map(([val, label]) => <option key={val} value={val}>{label}</option>)}
                 </select>
@@ -859,12 +655,7 @@ export default function AdminPage() {
                                     <div className="flex items-center gap-2 mt-0.5">
                                       {student.phone && <p className="text-xs text-[var(--text-gray)]">{getCountryFlag(student.residenceCountry, student.nationality)} {student.phone}</p>}
                                       {student.phone && (
-<<<<<<< HEAD
                                         <button onClick={(e) => { e.stopPropagation(); copyWhatsApp(student); }}
-=======
-                                        <button
-                                          onClick={(e) => { e.stopPropagation(); copyWhatsApp(student); }}
->>>>>>> 6f39a32e6dd91006a25283a6d28f1632919e2a29
                                           className={`text-xs px-1.5 py-0.5 rounded transition ${copied === student.id ? "bg-green-500 text-white" : "bg-gray-100 text-gray-500 hover:bg-[var(--gold)]/10 hover:text-[var(--gold)]"}`}>
                                           {copied === student.id ? "✓" : "📋"}
                                         </button>
@@ -904,14 +695,7 @@ export default function AdminPage() {
                             <span className="text-[var(--text-gray)]">الهاتف</span>
                             <div className="flex items-center gap-1.5">
                               <span className="font-medium text-[var(--lux-black)]">{getCountryFlag(selected.residenceCountry, selected.nationality)} {selected.phone}</span>
-<<<<<<< HEAD
                               <button onClick={() => copyWhatsApp(selected)} className={`text-xs px-2 py-0.5 rounded-lg transition font-medium ${copied === selected.id ? "bg-green-500 text-white" : "bg-[var(--gold)]/10 text-[var(--gold)] hover:bg-[var(--gold)]/20"}`}>
-=======
-                              <button
-                                onClick={() => copyWhatsApp(selected)}
-                                className={`text-xs px-2 py-0.5 rounded-lg transition font-medium ${copied === selected.id ? "bg-green-500 text-white" : "bg-[var(--gold)]/10 text-[var(--gold)] hover:bg-[var(--gold)]/20"}`}
-                                title="نسخ للواتساب">
->>>>>>> 6f39a32e6dd91006a25283a6d28f1632919e2a29
                                 {copied === selected.id ? "✓ نُسخ" : "📋 واتساب"}
                               </button>
                             </div>
@@ -927,11 +711,7 @@ export default function AdminPage() {
                         <select onChange={(e) => assignStudentToSection(selected.id, e.target.value ? parseInt(e.target.value) : null)} disabled={assigningSection} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-right text-black bg-white focus:outline-none focus:border-[var(--gold)] transition text-xs">
                           <option value="">بدون شعبة</option>
                           {sections.filter(s => s.gender === (selected.gender === "أنثى" || selected.gender === "female" ? "female" : "male") && s.academic_year === selected.academicYear).map(s => (
-<<<<<<< HEAD
                             <option key={s.id} value={s.id}>{s.name} ({s.level}) ({s.student_count}/{s.max_students})</option>
-=======
-                            <option key={s.id} value={s.id}>{s.name} ({s.student_count}/{s.max_students})</option>
->>>>>>> 6f39a32e6dd91006a25283a6d28f1632919e2a29
                           ))}
                         </select>
                       </div>
@@ -1035,14 +815,9 @@ export default function AdminPage() {
                 {sectionMsg && <div className={`mb-4 p-3 rounded-xl text-sm text-center ${sectionMsg.includes("خطأ") || sectionMsg.includes("يرجى") ? "bg-red-50 border border-red-200 text-red-600" : "bg-green-50 border border-green-200 text-green-600"}`}>{sectionMsg}</div>}
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="font-bold text-[var(--lux-black)]">الشعب الدراسية <span className="text-[var(--gold)]">({sections.length})</span></h3>
-<<<<<<< HEAD
                   <button onClick={() => { setShowSectionForm(true); setEditingSection(null); setSelectedSectionForTeachers(null); setSectionForm({ name: "", academicYear: "year1", level: "مبتدئ", gender: "male", maxStudents: "50" }); }} className="bg-[var(--gold)] text-black px-4 py-2 rounded-xl text-sm font-bold hover:opacity-90 transition">+ إضافة شعبة</button>
                 </div>
                 {/* ملخص سريع */}
-=======
-                  <button onClick={() => { setShowSectionForm(true); setEditingSection(null); setSectionForm({ name: "", academicYear: "year1", gender: "male", teacherId: "", maxStudents: "50" }); }} className="bg-[var(--gold)] text-black px-4 py-2 rounded-xl text-sm font-bold hover:opacity-90 transition">+ إضافة شعبة</button>
-                </div>
->>>>>>> 6f39a32e6dd91006a25283a6d28f1632919e2a29
                 <div className="flex gap-2 mb-4 flex-wrap">
                   {levels.map(lv => { const lvc = levelMap[lv]; const cnt = sections.filter(s => s.level === lv).length; return cnt > 0 ? <span key={lv} className={`text-xs px-3 py-1 rounded-full font-medium ${lvc.bg} ${lvc.color}`}>{lv}: {cnt} شعبة</span> : null; })}
                 </div>
@@ -1055,7 +830,6 @@ export default function AdminPage() {
                         if (yearSections.length === 0) return null;
                         return (
                           <div key={year}>
-<<<<<<< HEAD
                             <h4 className="font-bold text-[var(--lux-black)] text-sm mb-3 flex items-center gap-2">
                               <span className="w-2 h-2 rounded-full bg-[var(--gold)] inline-block"/>{yearMap[year]}
                               <span className="text-xs text-[var(--text-gray)] font-normal">({yearSections.reduce((a,s) => a + Number(s.student_count), 0)} طالب)</span>
@@ -1069,36 +843,6 @@ export default function AdminPage() {
                                 <div key={lv} className="mb-3">
                                   <div className="flex items-center gap-2 mb-2">
                                     <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${lvc.bg} ${lvc.color}`}>{lv}</span>
-=======
-                            <h4 className="font-bold text-[var(--lux-black)] text-sm mb-2 flex items-center gap-2">
-                              <span className="w-2 h-2 rounded-full bg-[var(--gold)] inline-block"/>{yearMap[year]}
-                            </h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                              {yearSections.map(section => {
-                                const pct = Math.round((Number(section.student_count) / section.max_students) * 100);
-                                const isFull = Number(section.student_count) >= section.max_students;
-                                return (
-                                  <div key={section.id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 hover:border-[var(--gold)]/30 transition">
-                                    <div className="flex items-start justify-between mb-3">
-                                      <div>
-                                        <div className="flex items-center gap-2">
-                                          <p className="font-bold text-[var(--lux-black)] text-sm">{section.name}</p>
-                                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${section.gender === "female" ? "bg-pink-100 text-pink-700" : "bg-blue-100 text-blue-700"}`}>{section.gender === "female" ? "👩 إناث" : "👨 ذكور"}</span>
-                                        </div>
-                                        {(section.teacher_first || section.teacher_last) && <p className="text-xs text-[var(--text-gray)] mt-0.5">👨‍🏫 {section.teacher_first} {section.teacher_last}</p>}
-                                      </div>
-                                      <div className="flex gap-1 shrink-0">
-                                        <button onClick={() => { setEditingSection(section); setSectionForm({ name: section.name, academicYear: section.academic_year, gender: section.gender, teacherId: section.teacher_id?.toString() || "", maxStudents: section.max_students.toString() }); setShowSectionForm(true); }} className="text-xs border border-gray-200 px-2 py-1 rounded-lg hover:bg-gray-50 transition text-[var(--text-gray)]">✏️</button>
-                                        <button onClick={() => deleteSection(section.id)} className="text-xs border border-red-200 px-2 py-1 rounded-lg hover:bg-red-50 transition text-red-500">🗑️</button>
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <div className="flex-1 bg-gray-100 rounded-full h-2">
-                                        <div className={`h-2 rounded-full transition-all ${isFull ? "bg-red-500" : pct > 70 ? "bg-yellow-400" : "bg-green-500"}`} style={{ width: `${pct}%` }} />
-                                      </div>
-                                      <span className={`text-xs font-bold shrink-0 ${isFull ? "text-red-600" : "text-[var(--text-gray)]"}`}>{section.student_count}/{section.max_students}{isFull && " 🔴"}</span>
-                                    </div>
->>>>>>> 6f39a32e6dd91006a25283a6d28f1632919e2a29
                                   </div>
                                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                                     {lvSections.map(section => {
@@ -1147,12 +891,13 @@ export default function AdminPage() {
                     </div>
                   )}
               </div>
+
+              {/* نموذج إضافة/تعديل شعبة */}
               {showSectionForm && (
                 <div className="w-72 shrink-0">
                   <div className="bg-white rounded-2xl shadow-sm p-5 sticky top-6 border border-gray-100">
                     <h3 className="font-bold text-[var(--lux-black)] mb-4 text-sm">{editingSection ? "✏️ تعديل الشعبة" : "➕ إضافة شعبة جديدة"}</h3>
                     <div className="flex flex-col gap-2.5">
-<<<<<<< HEAD
                       <div><label className="block text-xs text-[var(--text-gray)] mb-1">اسم الشعبة *</label><input value={sectionForm.name} onChange={(e) => setSectionForm(p => ({ ...p, name: e.target.value }))} placeholder="مثال: شعبة أ" className={inp} /></div>
                       <div><label className="block text-xs text-[var(--text-gray)] mb-1">السنة الدراسية *</label><select value={sectionForm.academicYear} onChange={(e) => setSectionForm(p => ({ ...p, academicYear: e.target.value }))} className={inp}>{Object.entries(yearMap).map(([val, label]) => <option key={val} value={val}>{label}</option>)}</select></div>
                       <div><label className="block text-xs text-[var(--text-gray)] mb-1">المستوى *</label>
@@ -1206,16 +951,6 @@ export default function AdminPage() {
                         <button onClick={addTeacherToSection} disabled={savingTeacherInSection || !addTeacherForm.teacherId} className="w-full bg-[var(--gold)] text-black py-2 rounded-xl font-bold hover:opacity-90 transition disabled:opacity-50 text-sm">
                           {savingTeacherInSection ? "..." : "إضافة ✓"}
                         </button>
-=======
-                      <div><label className="block text-xs text-[var(--text-gray)] mb-1">اسم الشعبة *</label><input value={sectionForm.name} onChange={(e) => setSectionForm(p => ({ ...p, name: e.target.value }))} placeholder="مثال: شعبة أ - ذكور" className={inp} /></div>
-                      <div><label className="block text-xs text-[var(--text-gray)] mb-1">السنة الدراسية *</label><select value={sectionForm.academicYear} onChange={(e) => setSectionForm(p => ({ ...p, academicYear: e.target.value }))} className={inp}>{Object.entries(yearMap).map(([val, label]) => <option key={val} value={val}>{label}</option>)}</select></div>
-                      <div><label className="block text-xs text-[var(--text-gray)] mb-1">الجنس *</label><select value={sectionForm.gender} onChange={(e) => setSectionForm(p => ({ ...p, gender: e.target.value }))} className={inp}><option value="male">👨 ذكور</option><option value="female">👩 إناث</option></select></div>
-                      <div><label className="block text-xs text-[var(--text-gray)] mb-1">المدرس المسؤول</label><select value={sectionForm.teacherId} onChange={(e) => setSectionForm(p => ({ ...p, teacherId: e.target.value }))} className={inp}><option value="">بدون مدرس</option>{teachers.map(t => <option key={t.id} value={t.id}>{t.firstName} {t.lastName} — {yearMap[t.teacherYear || ""]}</option>)}</select></div>
-                      <div><label className="block text-xs text-[var(--text-gray)] mb-1">الحد الأقصى للطلاب</label><input type="number" value={sectionForm.maxStudents} onChange={(e) => setSectionForm(p => ({ ...p, maxStudents: e.target.value }))} min="1" max="100" className={inp} /></div>
-                      <div className="flex gap-2 mt-1">
-                        <button onClick={saveSection} disabled={savingSection} className="flex-1 bg-[var(--gold)] text-black py-2 rounded-xl font-bold hover:opacity-90 transition disabled:opacity-60 text-sm">{savingSection ? "..." : editingSection ? "حفظ" : "إنشاء"}</button>
-                        <button onClick={() => { setShowSectionForm(false); setEditingSection(null); }} className="border border-gray-200 text-[var(--text-gray)] px-4 py-2 rounded-xl text-sm hover:bg-gray-50 transition">إلغاء</button>
->>>>>>> 6f39a32e6dd91006a25283a6d28f1632919e2a29
                       </div>
                     </div>
                   </div>
@@ -1252,13 +987,7 @@ export default function AdminPage() {
                         <div key={lesson.id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 hover:border-[var(--gold)]/30 transition">
                           <div className="flex items-center justify-between gap-3">
                             <div className="flex items-center gap-3 flex-1 overflow-hidden">
-<<<<<<< HEAD
                               <div className="w-10 h-10 rounded-lg bg-[var(--lux-black)] flex items-center justify-center shrink-0"><span className="text-[var(--gold)]">🎬</span></div>
-=======
-                              <div className="w-10 h-10 rounded-lg bg-[var(--lux-black)] flex items-center justify-center shrink-0">
-                                <span className="text-[var(--gold)]">🎬</span>
-                              </div>
->>>>>>> 6f39a32e6dd91006a25283a6d28f1632919e2a29
                               <div className="overflow-hidden">
                                 <p className="font-semibold text-[var(--lux-black)] text-sm truncate">{lesson.title}</p>
                                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
@@ -1277,11 +1006,6 @@ export default function AdminPage() {
                     </div>
                   )}
               </div>
-<<<<<<< HEAD
-=======
-
-              {/* نموذج إضافة درس */}
->>>>>>> 6f39a32e6dd91006a25283a6d28f1632919e2a29
               {showLessonForm && (
                 <div className="w-72 shrink-0">
                   <div className="bg-white rounded-2xl shadow-sm p-5 sticky top-6 border border-gray-100">
