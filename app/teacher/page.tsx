@@ -5,10 +5,6 @@ import { useRouter } from "next/navigation";
 
 const STRAPI_URL = process.env.NEXT_PUBLIC_STRAPI_URL || "http://localhost:1337";
 
-const yearMap: Record<string, string> = {
-  all: "جميع السنوات", year1: "السنة الأولى", year2: "السنة الثانية",
-  year3: "السنة الثالثة", year4: "السنة الرابعة", year5: "السنة الخامسة",
-};
 const statusMap: Record<string, { label: string; color: string; bg: string; border: string }> = {
   pending:  { label: "قيد المراجعة", color: "text-yellow-700", bg: "bg-yellow-50",  border: "border-yellow-200" },
   approved: { label: "مقبول",        color: "text-green-700",  bg: "bg-green-50",   border: "border-green-200"  },
@@ -17,12 +13,13 @@ const statusMap: Record<string, { label: string; color: string; bg: string; bord
 
 interface Student {
   id: number; email: string; firstName?: string; lastName?: string; phone?: string;
-  telegram?: string; nationality?: string; residenceCountry?: string;
+  telegram?: string; nationality?: string; residenceCountry?: string; gender?: string;
   registrationStatus?: string; academicYear?: string; isTeacher?: boolean;
 }
 interface SectionWithStudents {
-  id: number; name: string; academic_year: string; gender: string;
+  id: number; name: string; academic_year: string; level?: string;
   max_students: number; student_count: number; students: Student[];
+  teachers?: { teacher_id: number; subject?: string; first_name?: string; last_name?: string }[];
 }
 interface ZoomSession {
   id: number; documentId?: string; title: string; date: string; zoomLink: string; academicYear: string; isActive: boolean;
@@ -32,8 +29,13 @@ interface TeacherInfo {
 }
 interface AttendanceRecord { session_id: number; student_id: number; attended: boolean; }
 interface NoteRecord { student_id: number; note: string; }
+interface Lesson {
+  id: number; title: string; video_url: string; section_id: number;
+  subject: string; description?: string; duration?: string; order: number;
+  quiz_question?: string; quiz_answer?: string; attended?: boolean;
+}
 
-type Tab = "sections" | "students" | "sessions" | "attendance" | "add";
+type Tab = "sections" | "students" | "sessions" | "attendance" | "lessons" | "add";
 
 export default function TeacherPage() {
   const router = useRouter();
@@ -66,6 +68,18 @@ export default function TeacherPage() {
   const [msg, setMsg] = useState("");
   const [editingSession, setEditingSession] = useState<ZoomSession | null>(null);
 
+  // الدروس
+  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [loadingLessons, setLoadingLessons] = useState(false);
+  const [lessonMsg, setLessonMsg] = useState("");
+  const [showLessonForm, setShowLessonForm] = useState(false);
+  const [savingLesson, setSavingLesson] = useState(false);
+  const [selectedSectionForLessons, setSelectedSectionForLessons] = useState<SectionWithStudents | null>(null);
+  const [lessonForm, setLessonForm] = useState({
+    title: "", videoUrl: "", subject: "", description: "", duration: "", order: "0",
+    quizQuestion: "", quizAnswer: "",
+  });
+
   const getJwt = () => localStorage.getItem("jwt") || "";
   const inp = "w-full border border-gray-200 rounded-lg px-4 py-2.5 text-right text-black bg-white focus:outline-none focus:border-[var(--gold)] transition text-sm";
 
@@ -91,19 +105,24 @@ export default function TeacherPage() {
     const data = await res.json();
     if (data?.type === "teacher" && Array.isArray(data.data)) {
       setMySections(data.data);
-      // جمع كل الطلاب من كل الشعب
       const allS: Student[] = data.data.flatMap((s: SectionWithStudents) => s.students || []);
       setAllStudents(allS);
-      if (data.data.length > 0 && !selectedSection) setSelectedSectionState(data.data[0]);
+      if (data.data.length > 0 && !selectedSection) {
+        setSelectedSectionState(data.data[0]);
+        setSelectedSectionForLessons(data.data[0]);
+      }
     }
     setLoading(false);
   }, []);
 
   const fetchSessions = useCallback(async () => {
+    const yr = teacherInfo?.teacherYear || "year1";
     const res = await fetch(`${STRAPI_URL}/api/zoom-sessions?sort=date:desc`, { headers: { Authorization: `Bearer ${getJwt()}` } });
     const data = await res.json();
-    const yr = teacherInfo?.teacherYear || "year1";
-    const all: ZoomSession[] = Array.isArray(data?.data) ? data.data.map((s: ZoomSession) => ({ id: s.id, documentId: s.documentId, title: s.title, date: s.date, zoomLink: s.zoomLink, academicYear: s.academicYear, isActive: s.isActive })) : [];
+    const all: ZoomSession[] = Array.isArray(data?.data) ? data.data.map((s: ZoomSession) => ({
+      id: s.id, documentId: s.documentId, title: s.title, date: s.date,
+      zoomLink: s.zoomLink, academicYear: s.academicYear, isActive: s.isActive
+    })) : [];
     setSessions(all.filter(s => s.academicYear === yr));
   }, [teacherInfo]);
 
@@ -117,7 +136,21 @@ export default function TeacherPage() {
     }
   }, []);
 
-  useEffect(() => { if (authed && teacherInfo) { fetchMySections(); fetchSessions(); fetchNotes(); } }, [authed, teacherInfo, fetchMySections, fetchSessions, fetchNotes]);
+  const fetchLessons = useCallback(async (sectionId: number) => {
+    setLoadingLessons(true);
+    const res = await fetch(`/api/lessons?sectionId=${sectionId}`, { headers: { Authorization: `Bearer ${getJwt()}` } });
+    const data = await res.json();
+    setLessons(Array.isArray(data?.data) ? data.data : []);
+    setLoadingLessons(false);
+  }, []);
+
+  useEffect(() => {
+    if (authed && teacherInfo) { fetchMySections(); fetchSessions(); fetchNotes(); }
+  }, [authed, teacherInfo, fetchMySections, fetchSessions, fetchNotes]);
+
+  useEffect(() => {
+    if (selectedSectionForLessons) fetchLessons(selectedSectionForLessons.id);
+  }, [selectedSectionForLessons, fetchLessons]);
 
   const fetchAttendance = async (sessionId: number) => {
     const res = await fetch(`/api/teacher/attendance?sessionId=${sessionId}`, { headers: { Authorization: `Bearer ${getJwt()}` } });
@@ -138,10 +171,45 @@ export default function TeacherPage() {
     if (!selectedSessionForAttendance) return;
     const students = selectedSection?.students || allStudents;
     setSavingAttendance(true);
-    await Promise.all(students.map(s => fetch("/api/teacher/attendance", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${getJwt()}` }, body: JSON.stringify({ sessionId: selectedSessionForAttendance.id, studentId: s.id, attended: attendance[s.id] ?? false }) })));
+    await Promise.all(students.map(s => fetch("/api/teacher/attendance", {
+      method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${getJwt()}` },
+      body: JSON.stringify({ sessionId: selectedSessionForAttendance.id, studentId: s.id, attended: attendance[s.id] ?? false })
+    })));
     setAttendanceMsg("تم حفظ الحضور ✓");
     setTimeout(() => setAttendanceMsg(""), 3000);
     setSavingAttendance(false);
+  };
+
+  const saveLesson = async () => {
+    if (!lessonForm.title || !lessonForm.videoUrl || !selectedSectionForLessons) {
+      setLessonMsg("يرجى ملء العنوان والرابط واختيار الشعبة"); return;
+    }
+    setSavingLesson(true);
+    const res = await fetch("/api/lessons", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${getJwt()}` },
+      body: JSON.stringify({
+        title: lessonForm.title, videoUrl: lessonForm.videoUrl,
+        sectionId: selectedSectionForLessons.id,
+        subject: lessonForm.subject, description: lessonForm.description,
+        duration: lessonForm.duration, order: parseInt(lessonForm.order) || 0,
+        quizQuestion: lessonForm.quizQuestion || null,
+        quizAnswer: lessonForm.quizAnswer || null,
+      }),
+    });
+    if (!res.ok) { setLessonMsg("حدث خطأ"); setSavingLesson(false); return; }
+    setLessonMsg("تمت إضافة الدرس ✓");
+    setLessonForm({ title: "", videoUrl: "", subject: "", description: "", duration: "", order: "0", quizQuestion: "", quizAnswer: "" });
+    setShowLessonForm(false);
+    await fetchLessons(selectedSectionForLessons.id);
+    setSavingLesson(false);
+    setTimeout(() => setLessonMsg(""), 3000);
+  };
+
+  const deleteLesson = async (id: number) => {
+    if (!confirm("حذف هذا الدرس؟")) return;
+    await fetch(`/api/lessons?id=${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${getJwt()}` } });
+    if (selectedSectionForLessons) fetchLessons(selectedSectionForLessons.id);
   };
 
   const saveSession = async () => {
@@ -166,14 +234,20 @@ export default function TeacherPage() {
   const handleLogout = () => { localStorage.removeItem("jwt"); localStorage.removeItem("user"); document.cookie = "jwt=; path=/; max-age=0"; router.push("/login"); };
 
   const teacherName = `${teacherInfo?.firstName || ""} ${teacherInfo?.lastName || ""}`.trim() || teacherInfo?.email || "";
-  const teacherYear = teacherInfo?.teacherYear || "year1";
   const upcomingSessions = sessions.filter(s => new Date(s.date) >= new Date());
   const displayStudents = selectedSection ? selectedSection.students : allStudents;
   const filteredStudents = displayStudents.filter(s => `${s.firstName || ""} ${s.lastName || ""} ${s.email}`.toLowerCase().includes(search.toLowerCase()));
 
+  // المادة التي يدرّسها في الشعبة المختارة
+  const mySubjectInSection = (section: SectionWithStudents) => {
+    const t = section.teachers?.find(t => t.teacher_id === teacherInfo?.id);
+    return t?.subject || teacherInfo?.teacherSubject || "";
+  };
+
   const sidebarItems = [
     { id: "sections" as Tab, label: "شعبي", icon: "🏫", badge: mySections.length },
     { id: "students" as Tab, label: "طلابي", icon: "👥", badge: allStudents.length },
+    { id: "lessons" as Tab, label: "الدروس", icon: "🎬", badge: lessons.length },
     { id: "sessions" as Tab, label: "جلساتي", icon: "🎥", badge: upcomingSessions.length },
     { id: "attendance" as Tab, label: "الحضور", icon: "✅", badge: 0 },
     { id: "add" as Tab, label: editingSession ? "تعديل جلسة" : "إضافة جلسة", icon: "➕", badge: 0 },
@@ -194,7 +268,7 @@ export default function TeacherPage() {
         <div className="flex items-center gap-3">
           <div className="text-right hidden sm:block">
             <p className="text-white text-sm font-semibold">{teacherName}</p>
-            <p className="text-[var(--gold)]/70 text-xs">{teacherInfo?.teacherSubject} — {yearMap[teacherYear]}</p>
+            <p className="text-[var(--gold)]/70 text-xs">{teacherInfo?.teacherSubject || "مدرس"}</p>
           </div>
           <div className="w-9 h-9 rounded-full bg-[var(--gold)] flex items-center justify-center text-black font-bold text-sm shrink-0">{teacherName.charAt(0)}</div>
         </div>
@@ -211,23 +285,13 @@ export default function TeacherPage() {
               </div>
               <div>
                 <p className="text-white font-semibold text-sm">{teacherName}</p>
-                <p className="text-[var(--gold)]/70 text-xs">{teacherInfo?.teacherSubject}</p>
-                <span className="text-xs bg-[var(--gold)]/10 text-[var(--gold)] px-2 py-0.5 rounded-full mt-0.5 inline-block">{yearMap[teacherYear]}</span>
+                <p className="text-[var(--gold)]/70 text-xs">{teacherInfo?.teacherSubject || "مدرس"}</p>
               </div>
             </div>
             <div className="grid grid-cols-3 gap-2">
-              <div className="bg-white/5 rounded-xl p-2.5 text-center">
-                <p className="text-[var(--gold)] font-bold text-lg">{mySections.length}</p>
-                <p className="text-white/50 text-xs">شعبة</p>
-              </div>
-              <div className="bg-white/5 rounded-xl p-2.5 text-center">
-                <p className="text-green-400 font-bold text-lg">{allStudents.length}</p>
-                <p className="text-white/50 text-xs">طالب</p>
-              </div>
-              <div className="bg-white/5 rounded-xl p-2.5 text-center">
-                <p className="text-blue-400 font-bold text-lg">{sessions.length}</p>
-                <p className="text-white/50 text-xs">جلسة</p>
-              </div>
+              <div className="bg-white/5 rounded-xl p-2.5 text-center"><p className="text-[var(--gold)] font-bold text-lg">{mySections.length}</p><p className="text-white/50 text-xs">شعبة</p></div>
+              <div className="bg-white/5 rounded-xl p-2.5 text-center"><p className="text-green-400 font-bold text-lg">{allStudents.length}</p><p className="text-white/50 text-xs">طالب</p></div>
+              <div className="bg-white/5 rounded-xl p-2.5 text-center"><p className="text-blue-400 font-bold text-lg">{lessons.length}</p><p className="text-white/50 text-xs">درس</p></div>
             </div>
           </div>
 
@@ -238,49 +302,39 @@ export default function TeacherPage() {
                 className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition mb-1 text-right ${activeTab === item.id ? "bg-[var(--gold)] text-black" : "text-white/70 hover:bg-white/5 hover:text-white"}`}>
                 <span>{item.icon}</span>
                 {item.label}
-                {item.badge > 0 && (
-                  <span className={`mr-auto text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === item.id ? "bg-black/20 text-black" : "bg-[var(--gold)] text-black"}`}>{item.badge}</span>
-                )}
+                {item.badge > 0 && <span className={`mr-auto text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === item.id ? "bg-black/20 text-black" : "bg-[var(--gold)] text-black"}`}>{item.badge}</span>}
               </button>
             ))}
           </nav>
 
           <div className="p-3 border-t border-[var(--gold)]/10">
-            <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-red-400 hover:bg-red-500/10 transition text-right">
-              <span>🚪</span> تسجيل الخروج
-            </button>
+            <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-red-400 hover:bg-red-500/10 transition text-right"><span>🚪</span> تسجيل الخروج</button>
           </div>
         </aside>
 
         <main className="flex-1 p-4 md:p-6 overflow-auto min-w-0">
           <div className="mb-6">
             <h1 className="text-xl font-bold text-[var(--lux-black)]">{sidebarItems.find(i => i.id === activeTab)?.icon} {sidebarItems.find(i => i.id === activeTab)?.label}</h1>
-            <p className="text-[var(--text-gray)] text-sm">{yearMap[teacherYear]} — {teacherInfo?.teacherSubject}</p>
           </div>
 
-          {/* ===== شعبي ===== */}
+          {/* شعبي */}
           {activeTab === "sections" && (
             <div className="space-y-4">
               {loading ? <div className="text-center py-10 text-[var(--gold)]">جاري التحميل...</div>
                 : mySections.length === 0 ? (
-                  <div className="text-center py-16 bg-white rounded-2xl">
-                    <p className="text-4xl mb-3">🏫</p>
-                    <p className="font-semibold text-[var(--lux-black)]">لم يتم تعيينك في شعبة بعد</p>
-                    <p className="text-sm text-[var(--text-gray)] mt-1">تواصل مع إدارة المعهد</p>
-                  </div>
+                  <div className="text-center py-16 bg-white rounded-2xl"><p className="text-4xl mb-3">🏫</p><p className="font-semibold text-[var(--lux-black)]">لم يتم تعيينك في شعبة بعد</p></div>
                 ) : mySections.map(section => {
                   const pct = Math.round((section.student_count / section.max_students) * 100);
+                  const mySubject = mySubjectInSection(section);
                   return (
                     <div key={section.id} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
                       <div className="flex items-center justify-between mb-4">
                         <div>
                           <div className="flex items-center gap-2">
                             <h3 className="font-bold text-[var(--lux-black)]">{section.name}</h3>
-                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${section.gender === "female" ? "bg-pink-100 text-pink-700" : "bg-blue-100 text-blue-700"}`}>
-                              {section.gender === "female" ? "👩 إناث" : "👨 ذكور"}
-                            </span>
+                            {section.level && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">{section.level}</span>}
                           </div>
-                          <p className="text-xs text-[var(--text-gray)] mt-0.5">{yearMap[section.academic_year]}</p>
+                          {mySubject && <p className="text-xs text-[var(--gold)] mt-0.5">مادتك: {mySubject}</p>}
                         </div>
                         <div className="text-left">
                           <p className="text-2xl font-bold text-[var(--gold)]">{section.student_count}</p>
@@ -293,26 +347,26 @@ export default function TeacherPage() {
                         </div>
                         <span className="text-xs text-[var(--text-gray)]">{pct}%</span>
                       </div>
-                      {/* طلاب الشعبة */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                         {(section.students || []).slice(0, 6).map(student => {
                           const name = `${student.firstName || ""} ${student.lastName || ""}`.trim() || student.email;
                           const st = statusMap[student.registrationStatus || "pending"];
+                          const isFemale = student.gender === "female" || student.gender === "أنثى";
                           return (
                             <div key={student.id} className="flex items-center gap-2 p-2 bg-[var(--soft-white)] rounded-lg">
-                              <div className="w-7 h-7 rounded-full bg-[var(--lux-black)] flex items-center justify-center shrink-0">
+                              <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${isFemale ? "bg-pink-800" : "bg-[var(--lux-black)]"}`}>
                                 <span className="text-[var(--gold)] font-bold text-xs">{name.charAt(0)}</span>
                               </div>
                               <div className="flex-1 overflow-hidden">
                                 <p className="text-xs font-medium text-[var(--lux-black)] truncate">{name}</p>
+                                <p className="text-xs text-[var(--text-gray)]">{isFemale ? "👩" : "👨"}</p>
                               </div>
                               <span className={`text-xs px-1.5 py-0.5 rounded-full ${st.bg} ${st.color} border ${st.border} shrink-0`}>{st.label}</span>
                             </div>
                           );
                         })}
                         {section.students?.length > 6 && (
-                          <div className="flex items-center justify-center p-2 bg-[var(--gold)]/5 rounded-lg cursor-pointer hover:bg-[var(--gold)]/10 transition"
-                            onClick={() => { setSelectedSectionState(section); setActiveTab("students"); }}>
+                          <div className="flex items-center justify-center p-2 bg-[var(--gold)]/5 rounded-lg cursor-pointer hover:bg-[var(--gold)]/10 transition" onClick={() => { setSelectedSectionState(section); setActiveTab("students"); }}>
                             <p className="text-xs text-[var(--gold)] font-medium">+{section.students.length - 6} طالب آخر ←</p>
                           </div>
                         )}
@@ -323,27 +377,17 @@ export default function TeacherPage() {
             </div>
           )}
 
-          {/* ===== طلابي ===== */}
+          {/* طلابي */}
           {activeTab === "students" && (
             <div className="flex gap-5">
               <div className="flex-1">
-                {/* فلتر الشعبة */}
                 {mySections.length > 1 && (
                   <div className="flex gap-2 mb-4 flex-wrap">
-                    <button onClick={() => setSelectedSectionState(null)}
-                      className={`text-xs px-3 py-1.5 rounded-full font-medium transition ${!selectedSection ? "bg-[var(--gold)] text-black" : "bg-white border border-gray-200 text-[var(--text-gray)]"}`}>
-                      الكل ({allStudents.length})
-                    </button>
-                    {mySections.map(s => (
-                      <button key={s.id} onClick={() => setSelectedSectionState(s)}
-                        className={`text-xs px-3 py-1.5 rounded-full font-medium transition ${selectedSection?.id === s.id ? "bg-[var(--gold)] text-black" : "bg-white border border-gray-200 text-[var(--text-gray)]"}`}>
-                        🏫 {s.name} ({s.student_count})
-                      </button>
-                    ))}
+                    <button onClick={() => setSelectedSectionState(null)} className={`text-xs px-3 py-1.5 rounded-full font-medium transition ${!selectedSection ? "bg-[var(--gold)] text-black" : "bg-white border border-gray-200 text-[var(--text-gray)]"}`}>الكل ({allStudents.length})</button>
+                    {mySections.map(s => <button key={s.id} onClick={() => setSelectedSectionState(s)} className={`text-xs px-3 py-1.5 rounded-full font-medium transition ${selectedSection?.id === s.id ? "bg-[var(--gold)] text-black" : "bg-white border border-gray-200 text-[var(--text-gray)]"}`}>🏫 {s.name} ({s.student_count})</button>)}
                   </div>
                 )}
-                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="🔍 بحث بالاسم أو الإيميل..."
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-right text-black bg-white focus:outline-none focus:border-[var(--gold)] transition mb-4 text-sm" />
+                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="🔍 بحث بالاسم أو الإيميل..." className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-right text-black bg-white focus:outline-none focus:border-[var(--gold)] transition mb-4 text-sm" />
                 {loading ? <div className="text-center py-10 text-[var(--gold)]">جاري التحميل...</div>
                   : filteredStudents.length === 0 ? <div className="text-center py-10"><p className="text-4xl mb-2">👥</p><p className="text-[var(--text-gray)]">لا يوجد طلاب</p></div>
                   : (
@@ -352,17 +396,19 @@ export default function TeacherPage() {
                         const st = statusMap[student.registrationStatus || "pending"];
                         const name = `${student.firstName || ""} ${student.lastName || ""}`.trim() || student.email;
                         const hasNote = !!notes[student.id];
+                        const isFemale = student.gender === "female" || student.gender === "أنثى";
                         return (
                           <div key={student.id} onClick={() => { setSelectedStudent(selectedStudent?.id === student.id ? null : student); setEditingNote(null); }}
                             className={`bg-white rounded-xl p-4 shadow-sm cursor-pointer hover:shadow-md transition border-2 ${selectedStudent?.id === student.id ? "border-[var(--gold)]" : "border-transparent hover:border-gray-200"}`}>
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 rounded-full bg-[var(--lux-black)] flex items-center justify-center shrink-0">
+                                <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${isFemale ? "bg-pink-800" : "bg-[var(--lux-black)]"}`}>
                                   <span className="text-[var(--gold)] font-bold text-sm">{name.charAt(0)}</span>
                                 </div>
                                 <div>
                                   <div className="flex items-center gap-2">
                                     <p className="font-semibold text-[var(--lux-black)] text-sm">{name}</p>
+                                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${isFemale ? "bg-pink-100 text-pink-700" : "bg-blue-100 text-blue-700"}`}>{isFemale ? "👩" : "👨"}</span>
                                     {hasNote && <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">📝</span>}
                                   </div>
                                   <p className="text-xs text-[var(--text-gray)]">{student.email}</p>
@@ -376,7 +422,6 @@ export default function TeacherPage() {
                     </div>
                   )}
               </div>
-
               {selectedStudent && (
                 <div className="w-72 shrink-0">
                   <div className="bg-white rounded-2xl shadow-sm p-5 sticky top-6 border border-gray-100">
@@ -396,23 +441,18 @@ export default function TeacherPage() {
                     <div className="border-t border-gray-100 pt-4">
                       <div className="flex items-center justify-between mb-2">
                         <p className="text-xs font-bold text-[var(--lux-black)]">📝 ملاحظاتي</p>
-                        <button onClick={() => { setEditingNote(selectedStudent.id); setNoteText(notes[selectedStudent.id] || ""); }} className="text-xs text-[var(--gold)] hover:underline">
-                          {notes[selectedStudent.id] ? "تعديل" : "إضافة"}
-                        </button>
+                        <button onClick={() => { setEditingNote(selectedStudent.id); setNoteText(notes[selectedStudent.id] || ""); }} className="text-xs text-[var(--gold)] hover:underline">{notes[selectedStudent.id] ? "تعديل" : "إضافة"}</button>
                       </div>
                       {editingNote === selectedStudent.id ? (
                         <div className="flex flex-col gap-2">
-                          <textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} placeholder="اكتب ملاحظاتك..." rows={4}
-                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-right text-black bg-white focus:outline-none focus:border-[var(--gold)] transition text-xs resize-none" />
+                          <textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} placeholder="اكتب ملاحظاتك..." rows={4} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-right text-black bg-white focus:outline-none focus:border-[var(--gold)] transition text-xs resize-none" />
                           <div className="flex gap-2">
                             <button onClick={() => saveNote(selectedStudent.id)} disabled={savingNote} className="flex-1 bg-[var(--gold)] text-black py-1.5 rounded-lg font-bold hover:opacity-90 transition disabled:opacity-60 text-xs">{savingNote ? "..." : "حفظ"}</button>
                             <button onClick={() => setEditingNote(null)} className="border border-gray-200 text-[var(--text-gray)] px-3 py-1.5 rounded-lg text-xs hover:bg-gray-50 transition">إلغاء</button>
                           </div>
                         </div>
                       ) : notes[selectedStudent.id] ? (
-                        <div className="bg-blue-50 border border-blue-100 rounded-xl p-3">
-                          <p className="text-xs text-blue-800 leading-relaxed">{notes[selectedStudent.id]}</p>
-                        </div>
+                        <div className="bg-blue-50 border border-blue-100 rounded-xl p-3"><p className="text-xs text-blue-800 leading-relaxed">{notes[selectedStudent.id]}</p></div>
                       ) : <p className="text-xs text-[var(--text-gray)] text-center py-2">لا توجد ملاحظات بعد</p>}
                     </div>
                   </div>
@@ -421,7 +461,103 @@ export default function TeacherPage() {
             </div>
           )}
 
-          {/* ===== الحضور ===== */}
+          {/* الدروس */}
+          {activeTab === "lessons" && (
+            <div className="flex gap-5">
+              <div className="flex-1">
+                {lessonMsg && <div className={`mb-4 p-3 rounded-xl text-sm text-center ${lessonMsg.includes("خطأ") || lessonMsg.includes("يرجى") ? "bg-red-50 border border-red-200 text-red-600" : "bg-green-50 border border-green-200 text-green-600"}`}>{lessonMsg}</div>}
+
+                {/* اختيار الشعبة */}
+                {mySections.length > 1 && (
+                  <div className="flex gap-2 mb-4 flex-wrap">
+                    {mySections.map(s => (
+                      <button key={s.id} onClick={() => setSelectedSectionForLessons(s)}
+                        className={`text-xs px-3 py-1.5 rounded-full font-medium transition ${selectedSectionForLessons?.id === s.id ? "bg-[var(--gold)] text-black" : "bg-white border border-gray-200 text-[var(--text-gray)]"}`}>
+                        🏫 {s.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-bold text-[var(--lux-black)]">
+                    دروس {selectedSectionForLessons?.name || ""}
+                    <span className="text-[var(--gold)] mr-2">({lessons.length})</span>
+                  </h3>
+                  <button onClick={() => setShowLessonForm(v => !v)} className="bg-[var(--gold)] text-black px-4 py-2 rounded-xl text-sm font-bold hover:opacity-90 transition">+ إضافة درس</button>
+                </div>
+
+                {loadingLessons ? <div className="text-center py-10 text-[var(--gold)]">جاري التحميل...</div>
+                  : lessons.length === 0 ? (
+                    <div className="text-center py-16 bg-white rounded-2xl">
+                      <p className="text-4xl mb-3">🎬</p>
+                      <p className="font-semibold text-[var(--lux-black)]">لا توجد دروس بعد</p>
+                      <p className="text-sm text-[var(--text-gray)] mt-1">اضغط "إضافة درس" لرفع أول درس</p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-3">
+                      {lessons.map((lesson, index) => (
+                        <div key={lesson.id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 hover:border-[var(--gold)]/30 transition">
+                          <div className="flex items-start gap-3">
+                            <div className="w-8 h-8 rounded-full bg-[var(--gold)] flex items-center justify-center shrink-0 font-bold text-black text-sm">{index + 1}</div>
+                            <div className="flex-1 overflow-hidden">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="font-semibold text-[var(--lux-black)] text-sm truncate">{lesson.title}</p>
+                                <button onClick={() => deleteLesson(lesson.id)} className="text-xs border border-red-200 px-2 py-1 rounded-lg hover:bg-red-50 transition text-red-500 shrink-0">حذف</button>
+                              </div>
+                              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                {lesson.subject && <span className="text-xs text-[var(--gold)]">{lesson.subject}</span>}
+                                {lesson.duration && <span className="text-xs text-[var(--text-gray)]">⏱ {lesson.duration}</span>}
+                                {lesson.quiz_question && <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">📝 فيه اختبار</span>}
+                              </div>
+                              {lesson.quiz_question && (
+                                <div className="mt-2 p-2 bg-yellow-50 rounded-lg text-xs">
+                                  <p className="text-gray-600">س: {lesson.quiz_question}</p>
+                                  <p className="text-green-700 font-medium mt-0.5">ج: {lesson.quiz_answer}</p>
+                                </div>
+                              )}
+                              <a href={lesson.video_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline truncate block mt-0.5">{lesson.video_url}</a>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+              </div>
+
+              {/* نموذج إضافة درس */}
+              {showLessonForm && (
+                <div className="w-80 shrink-0">
+                  <div className="bg-white rounded-2xl shadow-sm p-5 sticky top-6 border border-[var(--gold)]/20">
+                    <h3 className="font-bold text-[var(--lux-black)] mb-4 text-sm">➕ إضافة درس جديد</h3>
+                    <div className="flex flex-col gap-2.5">
+                      <div><label className="block text-xs text-[var(--text-gray)] mb-1">عنوان الدرس *</label><input value={lessonForm.title} onChange={e => setLessonForm(p => ({ ...p, title: e.target.value }))} placeholder="مثال: شرح مقدمة الفقه" className={inp} /></div>
+                      <div><label className="block text-xs text-[var(--text-gray)] mb-1">رابط الفيديو *</label><input value={lessonForm.videoUrl} onChange={e => setLessonForm(p => ({ ...p, videoUrl: e.target.value }))} placeholder="https://youtube.com/..." className={inp} /></div>
+                      <div><label className="block text-xs text-[var(--text-gray)] mb-1">المادة</label><input value={lessonForm.subject} onChange={e => setLessonForm(p => ({ ...p, subject: e.target.value }))} placeholder="مثال: أصول الفقه" className={inp} /></div>
+                      <div><label className="block text-xs text-[var(--text-gray)] mb-1">الوصف</label><textarea value={lessonForm.description} onChange={e => setLessonForm(p => ({ ...p, description: e.target.value }))} placeholder="وصف الدرس..." rows={2} className={`${inp} resize-none`} /></div>
+                      <div><label className="block text-xs text-[var(--text-gray)] mb-1">المدة</label><input value={lessonForm.duration} onChange={e => setLessonForm(p => ({ ...p, duration: e.target.value }))} placeholder="مثال: 45 دقيقة" className={inp} /></div>
+                      <div><label className="block text-xs text-[var(--text-gray)] mb-1">الترتيب</label><input type="number" value={lessonForm.order} onChange={e => setLessonForm(p => ({ ...p, order: e.target.value }))} min="0" className={inp} /></div>
+
+                      {/* اختبار الحضور */}
+                      <div className="border-t border-gray-100 pt-2.5 mt-1">
+                        <p className="text-xs font-bold text-[var(--lux-black)] mb-2">📝 اختبار تأكيد الحضور</p>
+                        <div><label className="block text-xs text-[var(--text-gray)] mb-1">السؤال</label><input value={lessonForm.quizQuestion} onChange={e => setLessonForm(p => ({ ...p, quizQuestion: e.target.value }))} placeholder="مثال: ما اسم الكتاب المقرر؟" className={inp} /></div>
+                        <div className="mt-2"><label className="block text-xs text-[var(--text-gray)] mb-1">الإجابة الصحيحة</label><input value={lessonForm.quizAnswer} onChange={e => setLessonForm(p => ({ ...p, quizAnswer: e.target.value }))} placeholder="الإجابة الصحيحة" className={inp} /></div>
+                        <p className="text-xs text-[var(--text-gray)] mt-1">اترك الحقلين فارغين إذا لا تريد اختباراً</p>
+                      </div>
+
+                      <div className="flex gap-2 mt-1">
+                        <button onClick={saveLesson} disabled={savingLesson} className="flex-1 bg-[var(--gold)] text-black py-2 rounded-xl font-bold hover:opacity-90 transition disabled:opacity-60 text-sm">{savingLesson ? "..." : "إضافة"}</button>
+                        <button onClick={() => setShowLessonForm(false)} className="border border-gray-200 text-[var(--text-gray)] px-4 py-2 rounded-xl text-sm hover:bg-gray-50 transition">إلغاء</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* الحضور */}
           {activeTab === "attendance" && (
             <div className="space-y-5">
               <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
@@ -451,7 +587,6 @@ export default function TeacherPage() {
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <h3 className="font-bold text-[var(--lux-black)]">📋 {selectedSessionForAttendance.title}</h3>
-                      {/* فلتر الشعبة للحضور */}
                       {mySections.length > 1 && (
                         <div className="flex gap-2 mt-2 flex-wrap">
                           <button onClick={() => setSelectedSectionState(null)} className={`text-xs px-2 py-1 rounded-full ${!selectedSection ? "bg-[var(--gold)] text-black" : "bg-gray-100 text-gray-600"}`}>الكل</button>
@@ -459,10 +594,7 @@ export default function TeacherPage() {
                         </div>
                       )}
                     </div>
-                    <div className="text-left">
-                      <p className="text-2xl font-bold text-green-600">{Object.values(attendance).filter(Boolean).length}</p>
-                      <p className="text-xs text-[var(--text-gray)]">حاضر من {displayStudents.length}</p>
-                    </div>
+                    <div className="text-left"><p className="text-2xl font-bold text-green-600">{Object.values(attendance).filter(Boolean).length}</p><p className="text-xs text-[var(--text-gray)]">حاضر من {displayStudents.length}</p></div>
                   </div>
                   {attendanceMsg && <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-xl text-green-600 text-sm text-center">{attendanceMsg}</div>}
                   <div className="flex gap-2 mb-4">
@@ -473,14 +605,18 @@ export default function TeacherPage() {
                     {displayStudents.map(student => {
                       const name = `${student.firstName || ""} ${student.lastName || ""}`.trim() || student.email;
                       const isPresent = attendance[student.id] ?? false;
+                      const isFemale = student.gender === "female" || student.gender === "أنثى";
                       return (
                         <div key={student.id} onClick={() => setAttendance(p => ({ ...p, [student.id]: !p[student.id] }))}
                           className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition border-2 ${isPresent ? "bg-green-50 border-green-200" : "bg-gray-50 border-gray-100 hover:border-gray-200"}`}>
                           <div className="flex items-center gap-3">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${isPresent ? "bg-green-500" : "bg-gray-300"}`}>
-                              <span className="text-white font-bold text-xs">{isPresent ? "✓" : name.charAt(0)}</span>
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${isPresent ? "bg-green-500" : isFemale ? "bg-pink-800" : "bg-gray-300"}`}>
+                              <span className={`font-bold text-xs ${isPresent ? "text-white" : "text-[var(--gold)]"}`}>{isPresent ? "✓" : name.charAt(0)}</span>
                             </div>
-                            <p className={`font-medium text-sm ${isPresent ? "text-green-800" : "text-[var(--lux-black)]"}`}>{name}</p>
+                            <div>
+                              <p className={`font-medium text-sm ${isPresent ? "text-green-800" : "text-[var(--lux-black)]"}`}>{name}</p>
+                              <p className="text-xs text-[var(--text-gray)]">{isFemale ? "👩" : "👨"}</p>
+                            </div>
                           </div>
                           <span className={`text-xs font-bold px-3 py-1 rounded-full ${isPresent ? "bg-green-500 text-white" : "bg-gray-200 text-gray-500"}`}>{isPresent ? "حاضر" : "غائب"}</span>
                         </div>
@@ -495,7 +631,7 @@ export default function TeacherPage() {
             </div>
           )}
 
-          {/* ===== جلساتي ===== */}
+          {/* جلساتي */}
           {activeTab === "sessions" && (
             <div>
               {sessions.length === 0 ? (
@@ -532,7 +668,7 @@ export default function TeacherPage() {
             </div>
           )}
 
-          {/* ===== إضافة جلسة ===== */}
+          {/* إضافة جلسة */}
           {activeTab === "add" && (
             <div className="max-w-lg">
               <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
@@ -541,12 +677,11 @@ export default function TeacherPage() {
                 <div className="flex flex-col gap-4">
                   <div><label className="block text-sm font-medium text-[var(--lux-black)] mb-1">عنوان الجلسة *</label><input value={sessionForm.title} onChange={(e) => setSessionForm(p => ({ ...p, title: e.target.value }))} placeholder="مثال: لقاء إثرائي" className={inp} /></div>
                   <div><label className="block text-sm font-medium text-[var(--lux-black)] mb-1">التاريخ والوقت *</label><input type="datetime-local" value={sessionForm.date} onChange={(e) => setSessionForm(p => ({ ...p, date: e.target.value }))} className={inp} /></div>
-                  <div><label className="block text-sm font-medium text-[var(--lux-black)] mb-1">السنة الدراسية</label><div className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-right text-[var(--text-gray)] bg-gray-50 text-sm">{yearMap[teacherYear]}</div></div>
                   <div><label className="block text-sm font-medium text-[var(--lux-black)] mb-1">رابط Zoom *</label><input value={sessionForm.zoomLink} onChange={(e) => setSessionForm(p => ({ ...p, zoomLink: e.target.value }))} placeholder="https://zoom.us/j/..." className={inp} /></div>
                   <label className="flex items-center gap-3 cursor-pointer"><input type="checkbox" checked={sessionForm.isActive} onChange={(e) => setSessionForm(p => ({ ...p, isActive: e.target.checked }))} className="w-4 h-4 accent-[var(--gold)]" /><span className="text-sm text-[var(--lux-black)]">نشطة (تظهر للطلاب)</span></label>
                   <div className="flex gap-3">
                     <button onClick={saveSession} disabled={saving} className="flex-1 bg-[var(--gold)] text-black py-3 rounded-xl font-bold hover:opacity-90 transition disabled:opacity-60">{saving ? "جاري الحفظ..." : editingSession ? "حفظ التعديلات" : "إضافة الجلسة"}</button>
-                    {editingSession && <button onClick={() => { setEditingSession(null); setSessionForm({ title: "", date: "", zoomLink: "", academicYear: teacherYear, isActive: true }); setActiveTab("sessions"); }} className="border border-gray-200 text-[var(--text-gray)] px-6 py-3 rounded-xl hover:bg-gray-50 transition text-sm">إلغاء</button>}
+                    {editingSession && <button onClick={() => { setEditingSession(null); setSessionForm({ title: "", date: "", zoomLink: "", academicYear: teacherInfo?.teacherYear || "year1", isActive: true }); setActiveTab("sessions"); }} className="border border-gray-200 text-[var(--text-gray)] px-6 py-3 rounded-xl hover:bg-gray-50 transition text-sm">إلغاء</button>}
                   </div>
                 </div>
               </div>
