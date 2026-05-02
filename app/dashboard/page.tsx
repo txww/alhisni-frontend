@@ -26,7 +26,7 @@ interface SectionInfo {
 interface Lesson {
   id: number; title: string; video_url: string; section_id: number;
   subject: string; description?: string; duration?: string; order: number;
-  quiz_question?: string; attended: boolean;
+  quiz_question?: string; attended: boolean; pdf_url?: string;
 }
 
 const statusConfig: Record<string, { label: string; color: string; bg: string; border: string; icon: string; message: string }> = {
@@ -428,6 +428,11 @@ export default function DashboardPage() {
                         <h3 className="font-bold text-[var(--lux-black)]">{watchingLesson.title}</h3>
                         {watchingLesson.subject && <p className="text-xs text-[var(--gold)] mt-0.5">{watchingLesson.subject}</p>}
                         {watchingLesson.description && <p className="text-sm text-[var(--text-gray)] mt-1">{watchingLesson.description}</p>}
+                        {watchingLesson.pdf_url && (
+                          <a href={watchingLesson.pdf_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 mt-2 text-sm bg-blue-500 text-white px-4 py-2 rounded-xl hover:bg-blue-600 transition font-medium">
+                            📄 تحميل المقرر PDF
+                          </a>
+                        )}
                       </div>
                       <button onClick={() => setWatchingLesson(null)} className="text-xs border border-gray-200 px-3 py-1.5 rounded-lg text-[var(--text-gray)] hover:bg-gray-50 transition shrink-0">إغلاق</button>
                     </div>
@@ -484,6 +489,9 @@ export default function DashboardPage() {
                                 {lesson.subject && <span className="text-xs text-[var(--gold)]">{lesson.subject}</span>}
                                 {lesson.duration && <span className="text-xs text-[var(--text-gray)]">⏱ {lesson.duration}</span>}
                                 {lesson.quiz_question && !lesson.attended && accessible && <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">📝 يتطلب اختبار</span>}
+                                {lesson.pdf_url && accessible && (
+                                  <a href={lesson.pdf_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full hover:bg-blue-200 transition">📄 المقرر PDF</a>
+                                )}
                               </div>
                               {!accessible && index > 0 && <p className="text-xs text-gray-400 mt-0.5">أكمل الدرس {index} أولاً</p>}
                             </div>
