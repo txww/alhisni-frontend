@@ -212,7 +212,7 @@ export default function AdminPage() {
   const [showLessonForm, setShowLessonForm] = useState(false);
   const [savingLesson, setSavingLesson] = useState(false);
   const [lessonYearFilter, setLessonYearFilter] = useState("all");
-  const [lessonForm, setLessonForm] = useState({ title: "", videoUrl: "", academicYear: "year1", subject: "", description: "", duration: "", order: "0" });
+  const [lessonForm, setLessonForm] = useState({ title: "", videoUrl: "", academicYear: "year1", subject: "", description: "", duration: "", order: "0", pdfUrl: "" });
 
   useEffect(() => {
     const jwt = localStorage.getItem("jwt");
@@ -303,11 +303,11 @@ export default function AdminPage() {
     const res = await fetch("/api/lessons", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${getJwt()}` },
-      body: JSON.stringify({ title: lessonForm.title, videoUrl: lessonForm.videoUrl, academicYear: lessonForm.academicYear, subject: lessonForm.subject, description: lessonForm.description, duration: lessonForm.duration, order: parseInt(lessonForm.order) || 0 }),
+      body: JSON.stringify({ title: lessonForm.title, videoUrl: lessonForm.videoUrl, academicYear: lessonForm.academicYear, subject: lessonForm.subject, description: lessonForm.description, duration: lessonForm.duration, order: parseInt(lessonForm.order) || 0, pdfUrl: lessonForm.pdfUrl || null }),
     });
     if (!res.ok) { setLessonMsg("حدث خطأ"); setSavingLesson(false); return; }
     setLessonMsg("تمت إضافة الدرس ✓");
-    setLessonForm({ title: "", videoUrl: "", academicYear: "year1", subject: "", description: "", duration: "", order: "0" });
+    setLessonForm({ title: "", videoUrl: "", academicYear: "year1", subject: "", description: "", duration: "", order: "0", pdfUrl: "" });
     setShowLessonForm(false);
     await fetchLessons(); setSavingLesson(false);
     setTimeout(() => setLessonMsg(""), 3000);
@@ -1018,6 +1018,7 @@ export default function AdminPage() {
                       <div><label className="block text-xs text-[var(--text-gray)] mb-1">الوصف</label><textarea value={lessonForm.description} onChange={(e) => setLessonForm(p => ({ ...p, description: e.target.value }))} placeholder="وصف الدرس..." rows={2} className={`${inp} resize-none`} /></div>
                       <div><label className="block text-xs text-[var(--text-gray)] mb-1">المدة</label><input value={lessonForm.duration} onChange={(e) => setLessonForm(p => ({ ...p, duration: e.target.value }))} placeholder="مثال: 45 دقيقة" className={inp} /></div>
                       <div><label className="block text-xs text-[var(--text-gray)] mb-1">الترتيب</label><input type="number" value={lessonForm.order} onChange={(e) => setLessonForm(p => ({ ...p, order: e.target.value }))} min="0" className={inp} /></div>
+                      <div><label className="block text-xs text-[var(--text-gray)] mb-1">رابط PDF (اختياري)</label><input value={lessonForm.pdfUrl} onChange={(e) => setLessonForm(p => ({ ...p, pdfUrl: e.target.value }))} placeholder="https://drive.google.com/..." className={inp} /></div>
                       <div className="flex gap-2 mt-1">
                         <button onClick={saveLesson} disabled={savingLesson} className="flex-1 bg-[var(--gold)] text-black py-2 rounded-xl font-bold hover:opacity-90 transition disabled:opacity-60 text-sm">{savingLesson ? "..." : "إضافة"}</button>
                         <button onClick={() => setShowLessonForm(false)} className="border border-gray-200 text-[var(--text-gray)] px-4 py-2 rounded-xl text-sm hover:bg-gray-50 transition">إلغاء</button>
@@ -1096,4 +1097,3 @@ function InfoRow({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-//#new
