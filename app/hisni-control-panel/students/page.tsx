@@ -62,7 +62,7 @@ interface Teacher {
   teacherYear?: string; teacherSubject?: string; isTeacher?: boolean;
 }
 interface ZoomSession {
-  id: number; title: string; date: string; zoomLink: string; academicYear: string; isActive: boolean;
+  id: number; title: string; date: string; zoom_link: string; section_id: number; is_active: boolean;
 }
 interface SectionTeacher {
   teacher_id: number; subject?: string; first_name?: string; last_name?: string;
@@ -179,7 +179,7 @@ export default function AdminPage() {
 
   const [sessions, setSessions] = useState<ZoomSession[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
-  const [sessionForm, setSessionForm] = useState({ title: "", date: "", zoomLink: "", academicYear: "year1", isActive: true });
+  const [sessionForm, setSessionForm] = useState({ title: "", date: "", zoomLink: "", sectionId: "4", isActive: true });
   const [savingSession, setSavingSession] = useState(false);
   const [sessionMsg, setSessionMsg] = useState("");
   const [editingSession, setEditingSession] = useState<ZoomSession | null>(null);
@@ -349,9 +349,9 @@ export default function AdminPage() {
 
   const fetchSessions = async () => {
     setLoadingSessions(true);
-    const res = await fetch(`${STRAPI_URL}/api/zoom-sessions?sort=date:asc`, { headers: { Authorization: `Bearer ${getJwt()}` } });
+    const res = await fetch("/api/sessions", { headers: { Authorization: `Bearer ${getJwt()}` } });
     const data = await res.json();
-    setSessions(Array.isArray(data?.data) ? data.data.map((s: ZoomSession & { documentId?: string }) => ({ id: s.id, title: s.title, date: s.date, zoomLink: s.zoomLink, academicYear: s.academicYear, isActive: s.isActive })) : []);
+    setSessions(Array.isArray(data?.data) ? data.data : []);
     setLoadingSessions(false);
   };
 
@@ -426,19 +426,22 @@ export default function AdminPage() {
   };
 
   const saveSession = async () => {
-    if (!sessionForm.title || !sessionForm.date || !sessionForm.zoomLink) { setSessionMsg("يرجى ملء جميع الحقول"); return; }
+    if (!sessionForm.title || !sessionForm.date || !sessionForm.zoomLink || !sessionForm.sectionId) { setSessionMsg("يرجى ملء جميع الحقول"); return; }
     setSavingSession(true);
-    const url = editingSession ? `${STRAPI_URL}/api/zoom-sessions/${editingSession.id}` : `${STRAPI_URL}/api/zoom-sessions`;
-    await fetch(url, { method: editingSession ? "PUT" : "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${getJwt()}` }, body: JSON.stringify({ data: sessionForm }) });
+    const method = editingSession ? "PUT" : "POST";
+    const body = editingSession
+      ? { id: editingSession.id, title: sessionForm.title, date: sessionForm.date, zoomLink: sessionForm.zoomLink, sectionId: parseInt(sessionForm.sectionId), isActive: sessionForm.isActive }
+      : { title: sessionForm.title, date: sessionForm.date, zoomLink: sessionForm.zoomLink, sectionId: parseInt(sessionForm.sectionId), isActive: sessionForm.isActive };
+    await fetch("/api/sessions", { method, headers: { "Content-Type": "application/json", Authorization: `Bearer ${getJwt()}` }, body: JSON.stringify(body) });
     setSessionMsg(editingSession ? "تم التعديل ✓" : "تمت الإضافة ✓");
-    setSessionForm({ title: "", date: "", zoomLink: "", academicYear: "year1", isActive: true });
+    setSessionForm({ title: "", date: "", zoomLink: "", sectionId: "4", isActive: true });
     setEditingSession(null); await fetchSessions(); setSavingSession(false);
     setTimeout(() => setSessionMsg(""), 3000);
   };
 
   const deleteSession = async (id: number) => {
     if (!confirm("حذف هذه الجلسة؟")) return;
-    await fetch(`${STRAPI_URL}/api/zoom-sessions/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${getJwt()}` } });
+    await fetch(`/api/sessions?id=${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${getJwt()}` } });
     await fetchSessions();
   };
 
@@ -1038,13 +1041,18 @@ export default function AdminPage() {
                   <h3 className="font-bold text-[var(--lux-black)] mb-4 text-sm">{editingSession ? "✏️ تعديل الجلسة" : "➕ جلسة جديدة"}</h3>
                   {sessionMsg && <div className="mb-3 p-2 bg-green-50 border border-green-200 rounded-lg text-green-600 text-xs text-center">{sessionMsg}</div>}
                   <div className="flex flex-col gap-2.5">
-                    <div><label className="block text-xs text-[var(--text-gray)] mb-1">عنوان الجلسة *</label><input value={sessionForm.title} onChange={(e) => setSessionForm(p => ({ ...p, title: e.target.value }))} placeholder="مثال: لقاء إثرائي" className={inp} /></div>
+                    <div><label className="block text-xs text-[var(--text-gray)] mb-1">الشعبة *</label>
+                      <select value={sessionForm.sectionId} onChange={(e) => setSessionForm(p => ({ ...p, sectionId: e.target.value }))} className={inp}>
+                        <option value="4">الشعبة الأولى (المبتدئون)</option>
+                        <option value="6">الشعبة الثانية (المتقدمون)</option>
+                      </select>
+                    </div>
+                    <div><label className="block text-xs text-[var(--text-gray)] mb-1">عنوان الجلسة *</label><input value={sessionForm.title} onChange={(e) => setSessionForm(p => ({ ...p, title: e.target.value }))} placeholder="مثال: أصول الفقه" className={inp} /></div>
                     <div><label className="block text-xs text-[var(--text-gray)] mb-1">التاريخ والوقت *</label><input type="datetime-local" value={sessionForm.date} onChange={(e) => setSessionForm(p => ({ ...p, date: e.target.value }))} className={inp} /></div>
-                    <div><label className="block text-xs text-[var(--text-gray)] mb-1">رابط Zoom *</label><input value={sessionForm.zoomLink} onChange={(e) => setSessionForm(p => ({ ...p, zoomLink: e.target.value }))} placeholder="https://zoom.us/j/..." className={inp} /></div>
-                    <div><label className="block text-xs text-[var(--text-gray)] mb-1">السنة الدراسية</label><select value={sessionForm.academicYear} onChange={(e) => setSessionForm(p => ({ ...p, academicYear: e.target.value }))} className={inp}>{Object.entries(yearMap).map(([val, label]) => <option key={val} value={val}>{label}</option>)}</select></div>
+                    <div><label className="block text-xs text-[var(--text-gray)] mb-1">رابط Meet *</label><input value={sessionForm.zoomLink} onChange={(e) => setSessionForm(p => ({ ...p, zoomLink: e.target.value }))} placeholder="https://meet.google.com/..." className={inp} /></div>
                     <label className="flex items-center gap-2 cursor-pointer text-sm"><input type="checkbox" checked={sessionForm.isActive} onChange={(e) => setSessionForm(p => ({ ...p, isActive: e.target.checked }))} className="accent-[var(--gold)]" /><span className="text-[var(--lux-black)]">نشطة</span></label>
                     <button onClick={saveSession} disabled={savingSession} className="w-full bg-[var(--gold)] text-black py-2 rounded-xl font-bold hover:opacity-90 transition disabled:opacity-60 text-sm">{savingSession ? "..." : editingSession ? "حفظ التعديلات" : "إضافة الجلسة"}</button>
-                    {editingSession && <button onClick={() => { setEditingSession(null); setSessionForm({ title: "", date: "", zoomLink: "", academicYear: "year1", isActive: true }); }} className="w-full border border-gray-200 text-[var(--text-gray)] py-2 rounded-xl text-sm hover:bg-gray-50 transition">إلغاء</button>}
+                    {editingSession && <button onClick={() => { setEditingSession(null); setSessionForm({ title: "", date: "", zoomLink: "", sectionId: "4", isActive: true }); }} className="w-full border border-gray-200 text-[var(--text-gray)] py-2 rounded-xl text-sm hover:bg-gray-50 transition">إلغاء</button>}
                   </div>
                 </div>
               </div>
@@ -1052,28 +1060,31 @@ export default function AdminPage() {
                 {loadingSessions ? <div className="text-center py-10 text-[var(--gold)]">جاري التحميل...</div>
                   : sessions.length === 0 ? <div className="text-center py-10 text-[var(--text-gray)]">لا توجد جلسات بعد</div>
                   : (
-                    <div className="flex flex-col gap-3">
-                      {sessions.map((session) => {
-                        const isPast = new Date(session.date) < new Date();
+                    <div className="space-y-5">
+                      {[{id: 4, name: "الشعبة الأولى (المبتدئون)", color: "border-blue-200", dot: "bg-blue-500"}, {id: 6, name: "الشعبة الثانية (المتقدمون)", color: "border-green-200", dot: "bg-green-500"}].map(sec => {
+                        const secSessions = sessions.filter(s => s.section_id === sec.id);
+                        if (secSessions.length === 0) return null;
                         return (
-                          <div key={session.id} className={`bg-white rounded-xl p-4 shadow-sm border ${isPast ? "border-gray-100 opacity-60" : "border-[var(--gold)]/20"}`}>
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <p className="font-semibold text-[var(--lux-black)] text-sm">{session.title}</p>
-                                  {!session.isActive && <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">مخفية</span>}
-                                  {isPast ? <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">انتهت</span> : <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">قادمة</span>}
+                          <div key={sec.id}>
+                            <h4 className="font-bold text-sm text-[var(--lux-black)] mb-2 flex items-center gap-2">
+                              <span className={`w-2 h-2 rounded-full ${sec.dot} inline-block`}/>{sec.name}
+                            </h4>
+                            <div className="flex flex-col gap-2">
+                              {secSessions.map(session => (
+                                <div key={session.id} className={`bg-white rounded-xl p-4 shadow-sm border-2 ${sec.color}`}>
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="flex-1 overflow-hidden">
+                                      <p className="font-semibold text-[var(--lux-black)] text-sm">{session.title}</p>
+                                      <p className="text-xs text-[var(--text-gray)] mt-0.5">{new Date(session.date).toLocaleDateString("ar-SA", { weekday: "long", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
+                                      <a href={session.zoom_link} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline truncate block mt-0.5">{session.zoom_link}</a>
+                                    </div>
+                                    <div className="flex gap-1.5 shrink-0">
+                                      <button onClick={() => { setEditingSession(session); setSessionForm({ title: session.title, date: session.date?.slice(0,16) || "", zoomLink: session.zoom_link || "", sectionId: session.section_id?.toString() || "4", isActive: session.is_active ?? true }); window.scrollTo({top:0,behavior:"smooth"}); }} className="text-xs border border-gray-200 px-3 py-1 rounded-lg hover:bg-gray-50 transition text-[var(--text-gray)]">تعديل</button>
+                                      <button onClick={() => deleteSession(session.id)} className="text-xs border border-red-200 px-3 py-1 rounded-lg hover:bg-red-50 transition text-red-500">حذف</button>
+                                    </div>
+                                  </div>
                                 </div>
-                                <p className="text-xs text-[var(--text-gray)]">{new Date(session.date).toLocaleDateString("ar-SA", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <span className="text-xs bg-[var(--gold)]/10 text-[var(--gold)] px-2 py-0.5 rounded-full">{yearMap[session.academicYear]}</span>
-                                  <a href={session.zoomLink} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline truncate max-w-48">{session.zoomLink}</a>
-                                </div>
-                              </div>
-                              <div className="flex gap-2 shrink-0">
-                                <button onClick={() => { setEditingSession(session); setSessionForm({ title: session.title, date: session.date ? session.date.slice(0, 16) : "", zoomLink: session.zoomLink || "", academicYear: session.academicYear || "year1", isActive: session.isActive ?? true }); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs border border-gray-200 px-3 py-1 rounded-lg hover:bg-gray-50 transition text-[var(--text-gray)]">تعديل</button>
-                                <button onClick={() => deleteSession(session.id)} className="text-xs border border-red-200 px-3 py-1 rounded-lg hover:bg-red-50 transition text-red-500">حذف</button>
-                              </div>
+                              ))}
                             </div>
                           </div>
                         );
