@@ -130,14 +130,16 @@ const exportCSV = (students: Student[]) => {
   URL.revokeObjectURL(url);
 };
 
-type Tab = "overview" | "students" | "teachers" | "sessions" | "sections" | "lessons";
+type Tab = "overview" | "students" | "teachers" | "sessions" | "sections" | "lessons" | "materials" | "attendance";
 const sidebarItems: { id: Tab; label: string; icon: string }[] = [
-  { id: "overview",  label: "نظرة عامة",      icon: "📊" },
-  { id: "students",  label: "الطلاب",          icon: "👥" },
-  { id: "teachers",  label: "المدرسون",        icon: "👨‍🏫" },
-  { id: "sections",  label: "الشعب",           icon: "🏫" },
-  { id: "lessons",   label: "الدروس المسجلة", icon: "🎬" },
-  { id: "sessions",  label: "جلسات Zoom",      icon: "🎥" },
+  { id: "overview",    label: "نظرة عامة",      icon: "📊" },
+  { id: "students",    label: "الطلاب",          icon: "👥" },
+  { id: "teachers",    label: "المدرسون",        icon: "👨‍🏫" },
+  { id: "sections",    label: "الشعب",           icon: "🏫" },
+  { id: "lessons",     label: "الدروس المسجلة", icon: "🎬" },
+  { id: "materials",   label: "المقررات والملخصات", icon: "📚" },
+  { id: "sessions",    label: "جلسات Zoom",      icon: "🎥" },
+  { id: "attendance",  label: "الحضور والغياب",  icon: "✅" },
 ];
 
 const inp = "w-full border border-gray-200 rounded-lg px-3 py-2 text-right text-black bg-white focus:outline-none focus:border-[var(--gold)] transition text-sm";
@@ -214,6 +216,21 @@ export default function AdminPage() {
   const [lessonYearFilter, setLessonYearFilter] = useState("all");
   const [lessonForm, setLessonForm] = useState({ title: "", videoUrl: "", academicYear: "year1", subject: "", description: "", duration: "", order: "0", pdfUrl: "" });
 
+  // المقررات
+  interface Material { id: number; title: string; description?: string; file_url: string; section_id?: number; subject?: string; type: string; }
+  const [materials, setMaterials] = useState<Material[]>([]);
+  const [loadingMaterials, setLoadingMaterials] = useState(false);
+  const [materialMsg, setMaterialMsg] = useState("");
+  const [materialForm, setMaterialForm] = useState({ title: "", description: "", fileUrl: "", sectionId: "4", subject: "", type: "pdf" });
+  const [savingMaterial, setSavingMaterial] = useState(false);
+  const [showMaterialForm, setShowMaterialForm] = useState(false);
+
+  // الحضور والغياب
+  interface AttendanceReport { students: {id:number;first_name:string;last_name:string;email:string}[]; sessions: {id:number;title:string;date:string}[]; attendance: Record<string,boolean>; }
+  const [attendanceReport, setAttendanceReport] = useState<AttendanceReport | null>(null);
+  const [loadingAttendance, setLoadingAttendance] = useState(false);
+  const [attendanceSectionFilter, setAttendanceSectionFilter] = useState("4");
+
   useEffect(() => {
     const jwt = localStorage.getItem("jwt");
     if (!jwt) { setChecking(false); router.push("/login"); return; }
@@ -224,7 +241,41 @@ export default function AdminPage() {
       .finally(() => setChecking(false));
   }, [router]);
 
-  useEffect(() => { if (authed) { fetchStudents(); fetchSessions(); fetchTeachers(); fetchSections(); fetchLessons(); } }, [authed]);
+  useEffect(() => { if (authed) { fetchStudents(); fetchSessions(); fetchTeachers(); fetchSections(); fetchLessons(); fetchMaterials(); } }, [authed]);
+
+  const fetchMaterials = async () => {
+    setLoadingMaterials(true);
+    const res = await fetch("/api/materials", { headers: { Authorization: `Bearer ${getJwt()}` } });
+    const data = await res.json();
+    setMaterials(Array.isArray(data?.data) ? data.data : []);
+    setLoadingMaterials(false);
+  };
+
+  const saveMaterial = async () => {
+    if (!materialForm.title || !materialForm.fileUrl) { setMaterialMsg("يرجى ملء العنوان والرابط"); return; }
+    setSavingMaterial(true);
+    const res = await fetch("/api/materials", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${getJwt()}` }, body: JSON.stringify({ title: materialForm.title, description: materialForm.description, fileUrl: materialForm.fileUrl, sectionId: materialForm.sectionId ? parseInt(materialForm.sectionId) : null, subject: materialForm.subject, type: materialForm.type }) });
+    if (!res.ok) { setMaterialMsg("حدث خطأ"); setSavingMaterial(false); return; }
+    setMaterialMsg("تمت الإضافة ✓");
+    setMaterialForm({ title: "", description: "", fileUrl: "", sectionId: "4", subject: "", type: "pdf" });
+    setShowMaterialForm(false);
+    await fetchMaterials(); setSavingMaterial(false);
+    setTimeout(() => setMaterialMsg(""), 3000);
+  };
+
+  const deleteMaterial = async (id: number) => {
+    if (!confirm("حذف هذا المقرر؟")) return;
+    await fetch(`/api/materials?id=${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${getJwt()}` } });
+    await fetchMaterials();
+  };
+
+  const fetchAttendanceReport = async (sectionId: string) => {
+    setLoadingAttendance(true);
+    const res = await fetch(`/api/attendance/report?sectionId=${sectionId}`, { headers: { Authorization: `Bearer ${getJwt()}` } });
+    const data = await res.json();
+    setAttendanceReport(data);
+    setLoadingAttendance(false);
+  };
 
   const getJwt = () => localStorage.getItem("jwt") || "";
 
@@ -1094,6 +1145,170 @@ export default function AdminPage() {
               </div>
             </div>
           )}
+          {/* المقررات والملخصات */}
+          {activeTab === "materials" && (
+            <div className="flex gap-5">
+              <div className="flex-1">
+                {materialMsg && <div className={`mb-4 p-3 rounded-xl text-sm text-center ${materialMsg.includes("خطأ") || materialMsg.includes("يرجى") ? "bg-red-50 border border-red-200 text-red-600" : "bg-green-50 border border-green-200 text-green-600"}`}>{materialMsg}</div>}
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-bold text-[var(--lux-black)]">📚 المقررات والملخصات <span className="text-[var(--gold)]">({materials.length})</span></h3>
+                  <button onClick={() => setShowMaterialForm(v => !v)} className="bg-[var(--gold)] text-black px-4 py-2 rounded-xl text-sm font-bold hover:opacity-90 transition">+ إضافة</button>
+                </div>
+                {loadingMaterials ? <div className="text-center py-10 text-[var(--gold)]">جاري التحميل...</div>
+                  : materials.length === 0 ? (
+                    <div className="text-center py-16 bg-white rounded-2xl"><p className="text-4xl mb-3">📚</p><p className="font-semibold text-[var(--lux-black)]">لا توجد مقررات بعد</p></div>
+                  ) : (
+                    <div className="space-y-4">
+                      {[{id: 4, name: "الشعبة الأولى"}, {id: 6, name: "الشعبة الثانية"}, {id: null, name: "للشعبتين"}].map(sec => {
+                        const secMats = materials.filter(m => sec.id === null ? !m.section_id : m.section_id === sec.id);
+                        if (secMats.length === 0) return null;
+                        return (
+                          <div key={String(sec.id)}>
+                            <h4 className="font-bold text-sm text-[var(--lux-black)] mb-2 flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full bg-[var(--gold)] inline-block"/>{sec.name}
+                            </h4>
+                            <div className="flex flex-col gap-2">
+                              {secMats.map(mat => (
+                                <div key={mat.id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 flex items-center justify-between gap-3">
+                                  <div className="flex items-center gap-3 flex-1 overflow-hidden">
+                                    <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
+                                      <span className="text-blue-600">{mat.type === "pdf" ? "📄" : "📝"}</span>
+                                    </div>
+                                    <div className="overflow-hidden">
+                                      <p className="font-semibold text-[var(--lux-black)] text-sm">{mat.title}</p>
+                                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                        {mat.subject && <span className="text-xs bg-[var(--gold)]/10 text-[var(--gold)] px-2 py-0.5 rounded-full">{mat.subject}</span>}
+                                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{mat.type}</span>
+                                      </div>
+                                      {mat.description && <p className="text-xs text-[var(--text-gray)] mt-0.5 truncate">{mat.description}</p>}
+                                      <a href={mat.file_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline">فتح الرابط ↗</a>
+                                    </div>
+                                  </div>
+                                  <button onClick={() => deleteMaterial(mat.id)} className="text-xs border border-red-200 px-3 py-1 rounded-lg hover:bg-red-50 transition text-red-500 shrink-0">حذف</button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+              </div>
+              {showMaterialForm && (
+                <div className="w-72 shrink-0">
+                  <div className="bg-white rounded-2xl shadow-sm p-5 sticky top-6 border border-gray-100">
+                    <h3 className="font-bold text-[var(--lux-black)] mb-4 text-sm">➕ إضافة مقرر</h3>
+                    <div className="flex flex-col gap-2.5">
+                      <div><label className="block text-xs text-[var(--text-gray)] mb-1">العنوان *</label><input value={materialForm.title} onChange={e => setMaterialForm(p => ({...p, title: e.target.value}))} placeholder="مثال: كتاب الفقه الشافعي" className={inp} /></div>
+                      <div><label className="block text-xs text-[var(--text-gray)] mb-1">رابط الملف *</label><input value={materialForm.fileUrl} onChange={e => setMaterialForm(p => ({...p, fileUrl: e.target.value}))} placeholder="https://drive.google.com/..." className={inp} /></div>
+                      <div><label className="block text-xs text-[var(--text-gray)] mb-1">الشعبة</label>
+                        <select value={materialForm.sectionId} onChange={e => setMaterialForm(p => ({...p, sectionId: e.target.value}))} className={inp}>
+                          <option value="">للشعبتين</option>
+                          <option value="4">الشعبة الأولى</option>
+                          <option value="6">الشعبة الثانية</option>
+                        </select>
+                      </div>
+                      <div><label className="block text-xs text-[var(--text-gray)] mb-1">المادة</label><input value={materialForm.subject} onChange={e => setMaterialForm(p => ({...p, subject: e.target.value}))} placeholder="مثال: أصول الفقه" className={inp} /></div>
+                      <div><label className="block text-xs text-[var(--text-gray)] mb-1">النوع</label>
+                        <select value={materialForm.type} onChange={e => setMaterialForm(p => ({...p, type: e.target.value}))} className={inp}>
+                          <option value="pdf">📄 PDF</option>
+                          <option value="summary">📝 ملخص</option>
+                          <option value="book">📖 كتاب</option>
+                          <option value="other">📎 أخرى</option>
+                        </select>
+                      </div>
+                      <div><label className="block text-xs text-[var(--text-gray)] mb-1">الوصف</label><textarea value={materialForm.description} onChange={e => setMaterialForm(p => ({...p, description: e.target.value}))} rows={2} className={`${inp} resize-none`} /></div>
+                      <div className="flex gap-2 mt-1">
+                        <button onClick={saveMaterial} disabled={savingMaterial} className="flex-1 bg-[var(--gold)] text-black py-2 rounded-xl font-bold hover:opacity-90 transition disabled:opacity-60 text-sm">{savingMaterial ? "..." : "إضافة"}</button>
+                        <button onClick={() => setShowMaterialForm(false)} className="border border-gray-200 text-[var(--text-gray)] px-4 py-2 rounded-xl text-sm hover:bg-gray-50 transition">إلغاء</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* الحضور والغياب */}
+          {activeTab === "attendance" && (
+            <div className="space-y-5 max-w-5xl">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold text-[var(--lux-black)]">✅ الحضور والغياب</h2>
+                <div className="flex gap-2">
+                  {[{id:"4", name:"الشعبة الأولى"}, {id:"6", name:"الشعبة الثانية"}].map(s => (
+                    <button key={s.id} onClick={() => { setAttendanceSectionFilter(s.id); fetchAttendanceReport(s.id); }}
+                      className={`text-xs px-4 py-2 rounded-xl font-medium transition ${attendanceSectionFilter === s.id ? "bg-[var(--gold)] text-black" : "bg-white border border-gray-200 text-[var(--text-gray)]"}`}>
+                      {s.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {!attendanceReport && !loadingAttendance && (
+                <div className="text-center py-16 bg-white rounded-2xl">
+                  <p className="text-4xl mb-3">✅</p>
+                  <p className="font-semibold text-[var(--lux-black)]">اختر شعبة لعرض تقرير الحضور</p>
+                  <button onClick={() => fetchAttendanceReport("4")} className="mt-4 bg-[var(--gold)] text-black px-6 py-2 rounded-xl font-bold hover:opacity-90 transition text-sm">عرض الشعبة الأولى</button>
+                </div>
+              )}
+
+              {loadingAttendance && <div className="text-center py-10 text-[var(--gold)]">جاري التحميل...</div>}
+
+              {attendanceReport && !loadingAttendance && (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-auto">
+                  <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+                    <h3 className="font-bold text-[var(--lux-black)]">
+                      {attendanceSectionFilter === "4" ? "الشعبة الأولى" : "الشعبة الثانية"}
+                      <span className="text-[var(--gold)] mr-2">({attendanceReport.students.length} طالب)</span>
+                    </h3>
+                    <span className="text-xs text-[var(--text-gray)]">{attendanceReport.sessions.length} جلسة</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm" dir="rtl">
+                      <thead>
+                        <tr className="bg-gray-50">
+                          <th className="px-4 py-3 text-right font-bold text-[var(--lux-black)] sticky right-0 bg-gray-50 min-w-40">الطالب</th>
+                          {attendanceReport.sessions.map(s => (
+                            <th key={s.id} className="px-3 py-3 text-center font-medium text-[var(--text-gray)] text-xs min-w-24 whitespace-nowrap">
+                              {new Date(s.date).toLocaleDateString("ar-SA", { weekday: "short", month: "numeric", day: "numeric" })}
+                            </th>
+                          ))}
+                          <th className="px-4 py-3 text-center font-bold text-[var(--lux-black)] min-w-20">المجموع</th>
+                          <th className="px-4 py-3 text-center font-bold text-[var(--lux-black)] min-w-20">النسبة</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {attendanceReport.students.map((student, idx) => {
+                          const name = `${student.first_name || ""} ${student.last_name || ""}`.trim() || student.email;
+                          const attended = attendanceReport.sessions.filter(s => attendanceReport.attendance[`${student.id}_${s.id}`]).length;
+                          const total = attendanceReport.sessions.length;
+                          const pct = total > 0 ? Math.round((attended / total) * 100) : 0;
+                          return (
+                            <tr key={student.id} className={`border-t border-gray-50 ${idx % 2 === 0 ? "bg-white" : "bg-gray-50/30"}`}>
+                              <td className={`px-4 py-3 font-medium text-[var(--lux-black)] sticky right-0 ${idx % 2 === 0 ? "bg-white" : "bg-gray-50/30"}`}>{name}</td>
+                              {attendanceReport.sessions.map(s => {
+                                const present = attendanceReport.attendance[`${student.id}_${s.id}`];
+                                return (
+                                  <td key={s.id} className="px-3 py-3 text-center">
+                                    {present === true ? <span className="text-green-500 font-bold">✓</span> : present === false ? <span className="text-red-400">✗</span> : <span className="text-gray-300">-</span>}
+                                  </td>
+                                );
+                              })}
+                              <td className="px-4 py-3 text-center font-bold text-[var(--lux-black)]">{attended}/{total}</td>
+                              <td className="px-4 py-3 text-center">
+                                <span className={`text-xs font-bold px-2 py-1 rounded-full ${pct >= 75 ? "bg-green-100 text-green-700" : pct >= 50 ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700"}`}>{pct}%</span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
         </main>
       </div>
     </div>
