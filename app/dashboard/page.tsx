@@ -28,6 +28,10 @@ interface Lesson {
   subject: string; description?: string; duration?: string; order: number;
   quiz_question?: string; attended: boolean; pdf_url?: string;
 }
+interface Material {
+  id: number; title: string; description?: string; file_url: string;
+  section_id?: number; subject?: string; type: string;
+}
 
 const statusConfig: Record<string, { label: string; color: string; bg: string; border: string; icon: string; message: string }> = {
   pending:  { label: "قيد المراجعة", color: "text-yellow-600", bg: "bg-yellow-50", border: "border-yellow-300", icon: "⏳", message: "طلبك قيد المراجعة، سيتم التواصل معك قريباً." },
@@ -41,12 +45,13 @@ const educationMap: Record<string, string> = {
 const genderMap: Record<string, string> = { male: "ذكر", female: "أنثى" };
 const dayNames: Record<number, string> = { 0: "الأحد", 1: "الإثنين", 2: "الثلاثاء", 3: "الأربعاء", 4: "الخميس", 5: "الجمعة", 6: "السبت" };
 
-type Tab = "overview" | "schedule" | "lessons" | "profile";
+type Tab = "overview" | "schedule" | "lessons" | "materials" | "profile";
 const sidebarItems: { id: Tab; label: string; icon: string }[] = [
-  { id: "overview",  label: "نظرة عامة",      icon: "🏠" },
-  { id: "schedule",  label: "الجدول الأسبوعي", icon: "📅" },
-  { id: "lessons",   label: "الدروس المسجلة", icon: "🎬" },
-  { id: "profile",   label: "ملفي الشخصي",    icon: "👤" },
+  { id: "overview",   label: "نظرة عامة",         icon: "🏠" },
+  { id: "schedule",   label: "الجدول الأسبوعي",   icon: "📅" },
+  { id: "lessons",    label: "الدروس المسجلة",    icon: "🎬" },
+  { id: "materials",  label: "المقررات والملخصات", icon: "📚" },
+  { id: "profile",    label: "ملفي الشخصي",       icon: "👤" },
 ];
 
 function getYouTubeId(url: string): string | null {
@@ -64,8 +69,10 @@ export default function DashboardPage() {
   const [section, setSection] = useState<SectionInfo | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [materials, setMaterials] = useState<Material[]>([]);
   const [loadingLessons, setLoadingLessons] = useState(false);
   const [loadingSessions, setLoadingSessions] = useState(false);
+  const [loadingMaterials, setLoadingMaterials] = useState(false);
 
   // اختبار الحضور للدروس
   const [quizLesson, setQuizLesson] = useState<Lesson | null>(null);
@@ -106,6 +113,7 @@ export default function DashboardPage() {
       setSection(data.data);
       fetchLessons(data.data.id);
       fetchSessions(data.data.id);
+      fetchMaterials(data.data.id);
     }
   };
 
@@ -123,6 +131,14 @@ export default function DashboardPage() {
     const data = await res.json();
     if (Array.isArray(data?.data)) setSessions(data.data);
     setLoadingSessions(false);
+  };
+
+  const fetchMaterials = async (sectionId: number) => {
+    setLoadingMaterials(true);
+    const res = await fetch(`/api/materials?sectionId=${sectionId}`, { headers: { Authorization: `Bearer ${getJwt()}` } });
+    const data = await res.json();
+    if (Array.isArray(data?.data)) setMaterials(data.data);
+    setLoadingMaterials(false);
   };
 
   const canAccessLesson = (lesson: Lesson, index: number): boolean => {
@@ -500,6 +516,58 @@ export default function DashboardPage() {
                                 {isWatching ? "إغلاق" : "▶ مشاهدة"}
                               </button>
                             )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+            </div>
+          )}
+
+          {/* المقررات والملخصات */}
+          {activeTab === "materials" && (
+            <div className="max-w-2xl space-y-4">
+              <h2 className="text-xl font-bold text-[var(--lux-black)]">📚 المقررات والملخصات</h2>
+              {section && <p className="text-[var(--text-gray)] text-sm">{section.name}</p>}
+
+              {loadingMaterials ? <div className="text-center py-10 text-[var(--gold)]">جاري التحميل...</div>
+                : materials.length === 0 ? (
+                  <div className="text-center py-16 bg-white rounded-2xl">
+                    <p className="text-4xl mb-3">📚</p>
+                    <p className="font-semibold text-[var(--lux-black)]">لا توجد مقررات بعد</p>
+                    <p className="text-sm text-[var(--text-gray)] mt-1">ستظهر هنا المقررات والملخصات فور إضافتها</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {/* تجميع بالمادة */}
+                    {Array.from(new Set(materials.map(m => m.subject || "عام"))).map(subject => {
+                      const subMats = materials.filter(m => (m.subject || "عام") === subject);
+                      return (
+                        <div key={subject}>
+                          <h3 className="font-bold text-sm text-[var(--lux-black)] mb-2 flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-[var(--gold)] inline-block"/>
+                            {subject}
+                          </h3>
+                          <div className="flex flex-col gap-2">
+                            {subMats.map(mat => (
+                              <a key={mat.id} href={mat.file_url} target="_blank" rel="noopener noreferrer"
+                                className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 hover:border-[var(--gold)]/40 transition flex items-center gap-4 group">
+                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${mat.type === "pdf" ? "bg-red-50" : mat.type === "summary" ? "bg-blue-50" : mat.type === "book" ? "bg-green-50" : "bg-gray-50"}`}>
+                                  <span className="text-2xl">{mat.type === "pdf" ? "📄" : mat.type === "summary" ? "📝" : mat.type === "book" ? "📖" : "📎"}</span>
+                                </div>
+                                <div className="flex-1 overflow-hidden">
+                                  <p className="font-semibold text-[var(--lux-black)] text-sm group-hover:text-[var(--gold)] transition">{mat.title}</p>
+                                  {mat.description && <p className="text-xs text-[var(--text-gray)] mt-0.5 truncate">{mat.description}</p>}
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <span className={`text-xs px-2 py-0.5 rounded-full ${mat.type === "pdf" ? "bg-red-100 text-red-700" : mat.type === "summary" ? "bg-blue-100 text-blue-700" : mat.type === "book" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>
+                                      {mat.type === "pdf" ? "PDF" : mat.type === "summary" ? "ملخص" : mat.type === "book" ? "كتاب" : "ملف"}
+                                    </span>
+                                  </div>
+                                </div>
+                                <span className="text-[var(--gold)] opacity-0 group-hover:opacity-100 transition text-lg shrink-0">↗</span>
+                              </a>
+                            ))}
                           </div>
                         </div>
                       );
